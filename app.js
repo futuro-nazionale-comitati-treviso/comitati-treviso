@@ -9,6 +9,25 @@
     return (parts.length > 1 ? parts[0][0] + parts[1][0] : src.slice(0, 2)).toUpperCase();
   }
 
+  // "Chi ha inserito/modificato la scheda": nome scelto nel menu "Sei:" in
+  // alto, auto-dichiarato (nessun login — vedi README). I 27 comitati
+  // storici non hanno createdBy (erano gia' in data.js prima di questa
+  // funzionalita'), quindi la riga resta vuota per loro finche' non vengono
+  // modificati la prima volta.
+  function tsToDate(ts) { return ts && typeof ts.toDate === "function" ? ts.toDate() : null; }
+  function fmtWhen(ts) {
+    const d = tsToDate(ts);
+    return d ? d.toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" }) : "adesso";
+  }
+  function chiHaFattoLabel(d) {
+    const parts = [];
+    if (d.createdBy) parts.push(`Creato da ${d.createdBy} il ${fmtWhen(d.createdAt)}`);
+    if (d.updatedBy && (d.updatedBy !== d.createdBy || tsToDate(d.updatedAt)?.getTime() !== tsToDate(d.createdAt)?.getTime())) {
+      parts.push(`ultima modifica di ${d.updatedBy} il ${fmtWhen(d.updatedAt)}`);
+    }
+    return parts.join(" — ");
+  }
+
   function renderDetail(id) {
     const el = document.getElementById("detail");
     const d = window.FN_COMITATI.getById(id);
@@ -33,6 +52,7 @@
         ${d.ref2 ? `<div class="detail-row"><span class="drow-label">Secondo ref.</span><span class="drow-value">${d.ref2}</span></div>` : ""}
         ${d.note ? `<div class="detail-row"><span class="drow-label">Note</span><span class="drow-value">${d.note}</span></div>` : ""}
       </div>
+      ${chiHaFattoLabel(d) ? `<div class="detail-row chi-ha-fatto"><span class="drow-value" style="font-size:12px;color:var(--text-secondary,#777);">${chiHaFattoLabel(d)}</span></div>` : ""}
       <div class="actions">
         <button class="btn primary" data-action="write-email">✉️ Scrivi email</button>
         <a class="btn" href="tel:${d.tel}">📞 Chiama</a>

@@ -31,6 +31,14 @@
   // checklist, ecc.) causa un re-render che richiuderebbe tutto.
   const openPanels = new Set();
 
+  // Aggiunge chi ha fatto l'ultima modifica e quando a qualunque scrittura
+  // parziale sull'evento (checklist/budget/comitati coinvolti/report/stato).
+  // "Chi" e' il nome scelto nel menu "Sei:" in alto: auto-dichiarato, non un
+  // login vero (vedi README, sezione struttura territoriale e ruoli).
+  function stampMeta(patch) {
+    return { ...patch, updatedBy: (window.FN_APP && window.FN_APP.whoami()) || "anonimo", updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  }
+
   function fbNotice(container) {
     if (window.FN_FIREBASE_READY) { container.innerHTML = ""; return false; }
     container.innerHTML = `<div class="notice error">Firebase non configurato: compila <code>firebase-config.js</code> con le chiavi del tuo progetto per creare e vedere gli eventi. La bacheca funziona a livello di codice, manca solo la connessione al tuo progetto Firebase.</div>`;
@@ -242,6 +250,34 @@
     return [ev.place, ev.comune && ev.provincia ? `${ev.comune} (${ev.provincia})` : ev.comune].filter(Boolean).join(" — ");
   }
 
+  // Data Firestore -> Date JS. Subito dopo una scrittura locale il valore
+  // puo' essere ancora una stringa/oggetto in attesa del round-trip col
+  // server (serverTimestamp non risolto): in quel caso mostriamo "adesso".
+  function tsToDate(ts) {
+    if (!ts) return null;
+    if (typeof ts.toDate === "function") return ts.toDate();
+    return null;
+  }
+
+  function fmtWhen(ts) {
+    const d = tsToDate(ts);
+    if (!d) return "adesso";
+    return d.toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  // "Chi ha inserito/modificato cosa": nome scelto nel menu "Sei:" in alto
+  // (nessun login, quindi auto-dichiarato — vedi README). Se manca (evento
+  // creato prima di questa funzionalita', o menu lasciato vuoto) non
+  // mostriamo la riga invece di un "null" confuso.
+  function chiHaFattoLabel(ev) {
+    const parts = [];
+    if (ev.createdBy) parts.push(`Creato da ${ev.createdBy} il ${fmtWhen(ev.createdAt)}`);
+    if (ev.updatedBy && (ev.updatedBy !== ev.createdBy || tsToDate(ev.updatedAt)?.getTime() !== tsToDate(ev.createdAt)?.getTime())) {
+      parts.push(`ultima modifica di ${ev.updatedBy} il ${fmtWhen(ev.updatedAt)}`);
+    }
+    return parts.join(" — ");
+  }
+
   // ---------------------------------------------------------------------
   // Checklist
   // ---------------------------------------------------------------------
@@ -267,7 +303,7 @@
     if (!panel) return;
     const items = (ev.checklist && ev.checklist.length) ? ev.checklist.slice() : CHECKLIST_DEFAULT();
     function save(newItems) {
-      window.db.collection(COLLECTION).doc(id).set({ checklist: newItems }, { merge: true });
+      window.db.collection(COLLECTION).doc(id).set(stampMeta({ checklist: newItems }), { merge: true });
     }
     panel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
       cb.addEventListener("change", () => {
@@ -315,7 +351,7 @@
         speseEffettive: n(panel.querySelector(".bg-spese").value),
         note: panel.querySelector(".bg-note").value
       };
-      window.db.collection(COLLECTION).doc(id).set({ budget }, { merge: true });
+      window.db.collection(COLLECTION).doc(id).set(stampMeta({ budget }), { merge: true });
     });
   }
 
@@ -373,7 +409,7 @@
     let partecipazioni = (ev.partecipazioni || []).slice();
 
     function save(newPart) {
-      window.db.collection(COLLECTION).doc(id).set({ partecipazioni: newPart }, { merge: true });
+      window.db.collection(COLLECTION).doc(id).set(stampMeta({ partecipazioni: newPart }), { merge: true });
     }
 
     function renderVicini(km) {
@@ -471,7 +507,7 @@
         attivitaSuccessive: panel.querySelector(".rp-successive").value,
         note: panel.querySelector(".rp-note").value
       };
-      window.db.collection(COLLECTION).doc(id).set({ report }, { merge: true });
+      window.db.collection(COLLECTION).doc(id).set(stampMeta({ report }), { merge: true });
     });
   }
 
@@ -502,6 +538,7 @@
       </div>
       <div class="meta">${fmtDate(ev)}${luogoLabel(ev) ? " — " + luogoLabel(ev) : ""}${ev.tipologia ? " · " + ev.tipologia : ""}</div>
       <div><span class="target">${targetLabel}</span>${ev.responsabile ? `<span class="target">Resp: ${ev.responsabile}</span>` : ""}</div>
+      <div class="meta chi-ha-fatto">${chiHaFattoLabel(ev)}</div>
       ${ev.poster ? `<img class="event-poster" src="${ev.poster}" alt="Locandina evento" title="Clicca per ingrandire">` : ""}
       <p style="font-size:13px;">${(ev.description || "").replace(/</g, "&lt;")}</p>
       ${ev.lat != null && ev.lon != null ? `
@@ -538,7 +575,7 @@
     panels.forEach(p => p.wire(div, ev, id));
 
     div.querySelector(".ev-stato-select").addEventListener("change", (e) => {
-      window.db.collection(COLLECTION).doc(id).set({ stato: e.target.value }, { merge: true });
+      window.db.collection(COLLECTION).doc(id).set(stampMeta({ stato: e.target.value }), { merge: true });
     });
 
     if (ev.poster) {
@@ -682,7 +719,9 @@
         poster: posterData || null,
         target,
         createdBy: window.FN_APP.whoami() || "anonimo",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: window.FN_APP.whoami() || "anonimo",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       window.db.collection(COLLECTION).add(ev).then(() => {
         e.target.reset();

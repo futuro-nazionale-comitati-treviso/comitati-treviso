@@ -41,7 +41,14 @@
       note: d.note || "",
       ruolo: d.ruolo || "", // metadato descrittivo, nessun controllo accessi reale (vedi README)
       lat: (d.lat != null) ? d.lat : null,
-      lon: (d.lon != null) ? d.lon : null
+      lon: (d.lon != null) ? d.lon : null,
+      // Chi ha inserito/modificato la scheda: nome scelto nel menu "Sei:" in
+      // alto (nessun login, quindi auto-dichiarato — vedi README). I 27
+      // comitati storici non hanno createdBy (erano gia' in data.js).
+      createdBy: d.createdBy || null,
+      createdAt: d.createdAt || null,
+      updatedBy: d.updatedBy || null,
+      updatedAt: d.updatedAt || null
     };
   }
 
@@ -85,15 +92,22 @@
 
   function isEditable() { return !!window.FN_FIREBASE_READY; }
 
+  function whoami() {
+    return (window.FN_APP && window.FN_APP.whoami()) || null;
+  }
+
   function update(id, patch) {
     if (!isEditable()) return Promise.reject(new Error("Firebase non configurato: le modifiche ai comitati non possono essere salvate."));
-    return window.db.collection(COLLECTION).doc(String(id)).set(patch, { merge: true });
+    const stamped = { ...patch, updatedBy: whoami(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    return window.db.collection(COLLECTION).doc(String(id)).set(stamped, { merge: true });
   }
 
   function create(data) {
     if (!isEditable()) return Promise.reject(new Error("Firebase non configurato: non e' possibile aggiungere nuovi comitati."));
     const id = data.id ? String(data.id) : window.db.collection(COLLECTION).doc().id;
-    return window.db.collection(COLLECTION).doc(id).set(normalize({ ...data, id }));
+    const who = whoami();
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    return window.db.collection(COLLECTION).doc(id).set(normalize({ ...data, id, createdBy: who, createdAt: now, updatedBy: who, updatedAt: now }));
   }
 
   // Elenco delle province presenti nei dati attuali, per popolare i filtri.
