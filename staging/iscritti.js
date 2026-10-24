@@ -54,6 +54,10 @@
     const id = pubRef(comitatoId).doc().id;
     await pubRef(comitatoId).doc(id).set({ nome: nome || "", professione: professione || "" });
     await privRef(comitatoId).doc(id).set({ email: email || "", telefono: telefono || "" });
+    if (window.FN_ATTIVITA) {
+      const com = window.FN_COMITATI && window.FN_COMITATI.getById(comitatoId);
+      window.FN_ATTIVITA.registra("iscritto", `Nuovo iscritto in ${com ? com.name : "un comitato"}: ${nome || "senza nome"}.`);
+    }
     return id;
   }
 

@@ -101,6 +101,43 @@
     await snap.docs[0].ref.set({ ruolo: nuovoRuolo }, { merge: true });
   }
 
+  // Elenco di tutti gli admin/superadmin (per il pannello "Gestisci
+  // amministratori" — solo superadmin, vedi security rules "allow list").
+  async function elencaAdmin() {
+    if (!isSuperadmin()) throw new Error("Solo il superadmin può vedere l'elenco degli amministratori.");
+    const snap = await firebase.firestore().collection("utenti").where("ruolo", "in", ["admin", "superadmin"]).get();
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  }
+
+  // Cerca un referente/admin per email (per il pannello "Gestione referenti"
+  // del superadmin: modifica dati o cancellazione del profilo).
+  async function cercaUtentePerEmail(email) {
+    if (!isSuperadmin()) throw new Error("Solo il superadmin può cercare un referente.");
+    const snap = await firebase.firestore().collection("utenti").where("email", "==", (email || "").trim().toLowerCase()).limit(1).get();
+    if (snap.empty) return null;
+    return { uid: snap.docs[0].id, ...snap.docs[0].data() };
+  }
+
+  // Modifica i dati (nome/telefono) di un ALTRO utente, per conto del
+  // superadmin (le security rules permettono l'update finche' il ruolo
+  // nel documento resta invariato — qui non lo tocchiamo mai).
+  function aggiornaProfiloDi(uid, patch) {
+    if (!isSuperadmin()) return Promise.reject(new Error("Solo il superadmin può modificare il profilo di un altro referente."));
+    return firebase.firestore().collection("utenti").doc(uid).set(patch, { merge: true });
+  }
+
+  // Cancella il profilo (documento utenti/{uid}) di un referente/admin: solo
+  // superadmin, mai su se stesso. L'account di accesso (Firebase Auth) NON
+  // viene revocato — richiederebbe Cloud Functions/piano Blaze, non
+  // disponibile oggi (vedi ANALISI-E-ROADMAP.md); la persona resta quindi
+  // potenzialmente in grado di accedere, ma senza piu' un profilo/ruolo
+  // associato (nessun permesso di scrittura residuo).
+  function eliminaUtente(uid) {
+    if (!isSuperadmin()) return Promise.reject(new Error("Solo il superadmin può cancellare un profilo referente."));
+    if (currentUser && uid === currentUser.uid) return Promise.reject(new Error("Non puoi cancellare il tuo stesso profilo da qui."));
+    return firebase.firestore().collection("utenti").doc(uid).delete();
+  }
+
   function init() {
     if (!window.FN_FIREBASE_READY) { ready = true; notify(); return; }
     firebase.auth().onAuthStateChanged(user => {
@@ -127,7 +164,8 @@
   window.FN_AUTH = {
     init, onChange, isLoggedIn, ruolo, isAdmin, isSuperadmin, comitatoId, nome,
     puoModificareComitato, registrati, accedi, esci, reimpostaPassword,
-    aggiornaProfilo, impostaRuoloPerEmail,
+    aggiornaProfilo, impostaRuoloPerEmail, elencaAdmin, cercaUtentePerEmail,
+    aggiornaProfiloDi, eliminaUtente,
     currentUser: () => currentUser
   };
 })();

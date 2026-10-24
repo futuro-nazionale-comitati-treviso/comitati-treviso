@@ -112,7 +112,10 @@
     const now = firebase.firestore.FieldValue.serverTimestamp();
     // Restituisce l'id: serve ad auth.js per collegare un referente appena
     // registrato al comitato che si e' appena creato (Fase 2).
-    return window.db.collection(COLLECTION).doc(id).set(normalize({ ...data, id, createdBy: who, createdAt: now, updatedBy: who, updatedAt: now })).then(() => id);
+    return window.db.collection(COLLECTION).doc(id).set(normalize({ ...data, id, createdBy: who, createdAt: now, updatedBy: who, updatedAt: now })).then(() => {
+      if (window.FN_ATTIVITA) window.FN_ATTIVITA.registra("comitato", `Nuovo comitato: ${data.name || "senza nome"}.`);
+      return id;
+    });
   }
 
   // Elenco delle province presenti nei dati attuali, per popolare i filtri.
@@ -122,5 +125,23 @@
     return [...new Set(cache.map(d => d.provincia).filter(Boolean))].sort();
   }
 
-  window.FN_COMITATI = { init, onChange, getAll, getById, update, create, isEditable, provinceInUse };
+  // Cancellazione comitato (solo superadmin, vedi UI in rubrica.js e
+  // security rules: allow delete: if isAdmin()). Prima ripulisce le
+  // sottocollection iscritti_pubblici/iscritti_privati (Firestore non le
+  // cancella da solo insieme al documento padre), poi il documento comitato.
+  async function remove(id) {
+    if (!isEditable()) return Promise.reject(new Error("Firebase non configurato: non e' possibile cancellare un comitato."));
+    const comRef = window.db.collection(COLLECTION).doc(String(id));
+    const [pub, priv] = await Promise.all([
+      comRef.collection("iscritti_pubblici").get(),
+      comRef.collection("iscritti_privati").get()
+    ]);
+    const batch = window.db.batch();
+    pub.docs.forEach(d => batch.delete(d.ref));
+    priv.docs.forEach(d => batch.delete(d.ref));
+    batch.delete(comRef);
+    return batch.commit();
+  }
+
+  window.FN_COMITATI = { init, onChange, getAll, getById, update, create, remove, isEditable, provinceInUse };
 })();

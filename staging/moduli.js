@@ -31,6 +31,9 @@
       titolo: titolo || "", categoria: categoria || CATEGORIE[0], link: link || "",
       caricatoDa: window.FN_AUTH.nome() || "admin",
       caricatoIl: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(ref => {
+      if (window.FN_ATTIVITA) window.FN_ATTIVITA.registra("modulo", `Nuovo modulo disponibile: ${titolo || "senza titolo"}.`);
+      return ref;
     });
   }
 

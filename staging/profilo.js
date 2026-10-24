@@ -124,8 +124,18 @@
       </div>
 
       <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <h3 style="margin:0;">Iscritti del ${com ? com.name : "tuo comitato"}</h3>
+        <h3 style="margin-top:0;">Sede del comitato</h3>
+        <form class="stack" id="profilo-sede-form">
+          <label>Indirizzo</label>
+          <input type="text" id="pf-sede" value="${com && com.indirizzo ? com.indirizzo : ""}" placeholder="Es. Piazza dei Signori 1, Treviso">
+          <button type="submit" class="btn primary">📍 Salva e geolocalizza</button>
+          <div class="email-modal-status" id="profilo-sede-status">${com && com.lat != null ? `Posizione salvata: ${com.lat.toFixed(5)}, ${com.lon.toFixed(5)}` : ""}</div>
+        </form>
+      </div>
+
+      <div class="card iscritti-card">
+        <div class="iscritti-card-head">
+          <h3 style="margin:0;">👥 Iscritti del ${com ? com.name : "tuo comitato"}</h3>
         </div>
         <div class="iscritti-legenda">
           <span class="pill pill-private">Contatti — visibili solo a te</span>
@@ -164,6 +174,22 @@
         nome: document.getElementById("pf-nome").value,
         telefono: document.getElementById("pf-telefono").value
       }).catch(err => alert("Errore: " + err.message));
+    });
+
+    document.getElementById("profilo-sede-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!com) return;
+      const sedeStatus = document.getElementById("profilo-sede-status");
+      const indirizzo = document.getElementById("pf-sede").value;
+      sedeStatus.textContent = "Ricerca della posizione in corso…";
+      const pos = await window.FN_UTILS.geocodeIndirizzo(indirizzo);
+      if (!pos) {
+        sedeStatus.textContent = "Indirizzo non trovato: prova a scriverlo in modo più preciso (via, numero civico, comune).";
+        return;
+      }
+      window.FN_COMITATI.update(com.id, { indirizzo, lat: pos.lat, lon: pos.lon })
+        .then(() => { sedeStatus.textContent = `Posizione salvata: ${pos.lat.toFixed(5)}, ${pos.lon.toFixed(5)}`; })
+        .catch(err => { sedeStatus.textContent = "Errore: " + err.message; });
     });
 
     document.getElementById("iscritto-form").addEventListener("submit", (e) => {
@@ -209,6 +235,33 @@
   // -----------------------------------------------------------------------
   let unsubBlocchi = null;
 
+  function renderListaAdmin() {
+    const wrap = document.getElementById("admin-lista-admin");
+    if (!wrap) return;
+    wrap.innerHTML = '<p class="detail empty">Caricamento…</p>';
+    window.FN_AUTH.elencaAdmin().then(lista => {
+      const altri = lista.filter(u => u.ruolo === "admin");
+      wrap.innerHTML = altri.length
+        ? altri.map(u => `
+          <div class="iscritto-row" data-uid="${u.uid}">
+            <div class="iscritto-info">
+              <div class="iscritto-nome">${u.nome || "(senza nome)"}</div>
+              <div class="iscritto-contatti">${u.email || ""}</div>
+            </div>
+            <button class="btn small" data-revoca="${u.uid}" data-email="${u.email || ""}">Revoca admin</button>
+          </div>`).join("")
+        : '<p class="detail empty">Nessun altro amministratore nominato.</p>';
+      wrap.querySelectorAll("[data-revoca]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (!confirm(`Togliere i permessi di amministratore a ${btn.dataset.email}?`)) return;
+          window.FN_AUTH.impostaRuoloPerEmail(btn.dataset.email, "referente")
+            .then(() => renderListaAdmin())
+            .catch(err => alert("Errore: " + err.message));
+        });
+      });
+    }).catch(err => { wrap.innerHTML = `<p class="detail empty">Errore: ${err.message}</p>`; });
+  }
+
   function renderAdminPanel(stato) {
     const wrap = document.getElementById("profilo-admin-panel");
     if (!wrap) return;
@@ -217,13 +270,24 @@
         <h3 style="margin-top:0;">Pannello amministratore</h3>
         ${stato.ruolo === "superadmin" ? `
         <div class="admin-section">
+          <h4 style="margin:8px 0;">Gestisci amministratori</h4>
           <label>Email del referente da nominare amministratore</label>
           <div class="form-row">
             <input type="email" id="admin-nomina-email" placeholder="email@esempio.it" style="flex:2;">
             <button class="btn primary" id="admin-nomina-btn" style="flex:1;">Nomina admin</button>
           </div>
           <div class="email-modal-status" id="admin-nomina-status"></div>
-          <div class="muted" style="font-size:11.5px;">Gli admin hanno gli stessi poteri tuoi tranne uno: non possono nominare altri admin.</div>
+          <div class="muted" style="font-size:11.5px;margin-bottom:10px;">Gli admin hanno gli stessi poteri tuoi tranne uno: non possono nominare altri admin.</div>
+          <div id="admin-lista-admin"></div>
+        </div>
+        <div class="admin-section">
+          <h4 style="margin:8px 0;">Gestione referenti</h4>
+          <label>Email del referente da cercare</label>
+          <div class="form-row">
+            <input type="email" id="admin-cerca-email" placeholder="email@esempio.it" style="flex:2;">
+            <button type="button" class="btn" id="admin-cerca-btn" style="flex:1;">Cerca</button>
+          </div>
+          <div id="admin-referente-risultato"></div>
         </div>` : ""}
         <div class="admin-section">
           <div class="form-row">
@@ -239,8 +303,56 @@
         const email = document.getElementById("admin-nomina-email").value;
         status.textContent = "Nomina in corso…";
         window.FN_AUTH.impostaRuoloPerEmail(email, "admin")
-          .then(() => { status.textContent = `${email} è ora amministratore.`; })
+          .then(() => { status.textContent = `${email} è ora amministratore.`; renderListaAdmin(); })
           .catch(err => { status.textContent = "Errore: " + err.message; });
+      });
+      renderListaAdmin();
+
+      document.getElementById("admin-cerca-btn").addEventListener("click", async () => {
+        const risultato = document.getElementById("admin-referente-risultato");
+        const email = document.getElementById("admin-cerca-email").value;
+        risultato.innerHTML = '<p class="detail empty">Ricerca…</p>';
+        try {
+          const u = await window.FN_AUTH.cercaUtentePerEmail(email);
+          if (!u) { risultato.innerHTML = '<p class="detail empty">Nessun referente trovato con questa email.</p>'; return; }
+          const comRef = window.FN_COMITATI.getById(u.comitatoId);
+          risultato.innerHTML = `
+            <form class="stack" id="admin-edit-referente-form" style="margin-top:8px;">
+              <label>Nome e cognome</label>
+              <input type="text" id="admin-edit-nome" value="${u.nome || ""}">
+              <label>Telefono</label>
+              <input type="tel" id="admin-edit-telefono" value="${u.telefono || ""}">
+              <div class="muted" style="font-size:11.5px;">Comitato: ${comRef ? comRef.name : "—"} · ruolo: ${ruoloLabel(u.ruolo)}</div>
+              <div class="actions">
+                <button type="submit" class="btn primary">Salva dati referente</button>
+                ${comRef ? '<button type="button" class="btn" id="admin-edit-comitato-btn">✏️ Modifica scheda comitato</button>' : ""}
+                <button type="button" class="btn danger" id="admin-elimina-referente-btn" style="margin-left:auto;">🗑️ Elimina referente</button>
+              </div>
+              <div class="email-modal-status" id="admin-edit-status"></div>
+            </form>`;
+          document.getElementById("admin-edit-referente-form").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const status = document.getElementById("admin-edit-status");
+            status.textContent = "Salvataggio…";
+            window.FN_AUTH.aggiornaProfiloDi(u.uid, {
+              nome: document.getElementById("admin-edit-nome").value,
+              telefono: document.getElementById("admin-edit-telefono").value
+            }).then(() => { status.textContent = "Dati aggiornati."; }).catch(err => { status.textContent = "Errore: " + err.message; });
+          });
+          if (comRef) {
+            document.getElementById("admin-edit-comitato-btn").addEventListener("click", () => {
+              window.FN_RUBRICA.openComitatoModal(comRef);
+            });
+          }
+          document.getElementById("admin-elimina-referente-btn").addEventListener("click", () => {
+            if (!confirm(`Cancellare definitivamente il profilo di ${u.nome || u.email}? Il comitato e i suoi iscritti restano, ma la persona perde l'accesso alla pagina Profilo.`)) return;
+            window.FN_AUTH.eliminaUtente(u.uid)
+              .then(() => { risultato.innerHTML = '<p class="detail empty">Profilo cancellato.</p>'; })
+              .catch(err => alert("Errore: " + err.message));
+          });
+        } catch (err) {
+          risultato.innerHTML = `<p class="detail empty">Errore: ${err.message}</p>`;
+        }
       });
     }
 

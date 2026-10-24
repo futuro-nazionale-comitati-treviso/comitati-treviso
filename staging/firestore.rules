@@ -98,6 +98,22 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
+    // Bacheca della community (Fase 2, Dashboard): piccoli messaggi di
+    // attivita' (nuovo iscritto/modulo/comitato), generati dal client al
+    // momento stesso dell'azione. Lettura pubblica; in scrittura chiunque
+    // sia autenticato puo' creare una voce breve (niente update/delete per
+    // i referenti: solo un admin puo' moderare rimuovendo una voce).
+    // ------------------------------------------------------------------
+    match /attivita_treviso/{doc} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.messaggio is string
+                    && request.resource.data.messaggio.size() < 200;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
     // Utenti (profilo + ruolo di ogni referente/admin/superadmin).
     // - Ognuno legge il proprio profilo; un admin/superadmin puo' leggere
     //   quello di chiunque.
@@ -123,7 +139,8 @@ service cloud.firestore {
                           && uid != request.auth.uid
                           && request.resource.data.ruolo in ["referente", "admin"])
                     );
-      allow delete: if false;
+      // Solo il superadmin puo' cancellare un profilo referente (mai il proprio).
+      allow delete: if isSuperadmin() && uid != request.auth.uid;
     }
   }
 }

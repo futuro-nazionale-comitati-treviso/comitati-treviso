@@ -138,6 +138,9 @@
     document.getElementById("cm-note").value = d.note;
     document.getElementById("comitato-modal-status").textContent = "";
     document.getElementById("comitato-form").dataset.editingId = existing ? d.id : "";
+    const delBtn = document.getElementById("comitato-modal-delete");
+    delBtn.style.display = (existing && window.FN_AUTH && window.FN_AUTH.isSuperadmin()) ? "inline-flex" : "none";
+    delBtn.dataset.deleteId = existing ? d.id : "";
     document.getElementById("comitato-modal").style.display = "flex";
     document.getElementById("cm-name").focus();
   }
@@ -150,6 +153,17 @@
     document.getElementById("comitato-modal-cancel").addEventListener("click", closeComitatoModal);
     document.getElementById("comitato-modal").addEventListener("click", (e) => {
       if (e.target.id === "comitato-modal") closeComitatoModal();
+    });
+    document.getElementById("comitato-modal-delete").addEventListener("click", (e) => {
+      const id = e.target.dataset.deleteId;
+      if (!id) return;
+      const d = window.FN_COMITATI.getById(id);
+      if (!confirm(`Cancellare definitivamente "${d ? d.name : id}" e tutti i suoi iscritti? L'operazione non è reversibile.`)) return;
+      const statusEl = document.getElementById("comitato-modal-status");
+      statusEl.textContent = "Cancellazione in corso…";
+      window.FN_COMITATI.remove(id)
+        .then(() => closeComitatoModal())
+        .catch(err => { statusEl.textContent = "Errore: " + err.message; });
     });
     document.getElementById("comitato-form").addEventListener("submit", (e) => {
       e.preventDefault();

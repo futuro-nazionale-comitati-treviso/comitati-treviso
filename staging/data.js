@@ -80,5 +80,24 @@ window.FN_UTILS = {
       if (dataUrl.length < (maxBytes || 650000)) return dataUrl;
     }
     return null;
+  },
+  // Geocodifica un indirizzo testuale in lat/lon tramite Nominatim
+  // (OpenStreetMap, gratuito, nessuna chiave API). Usata per la "sede" del
+  // comitato inserita dal referente nella pagina Profilo (Fase 2). Ritorna
+  // null se l'indirizzo non viene trovato o in caso di errore di rete.
+  async geocodeIndirizzo(indirizzo) {
+    const q = (indirizzo || "").trim();
+    if (!q) return null;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=it&q=${encodeURIComponent(q)}`;
+    try {
+      const res = await fetch(url, { headers: { "Accept-Language": "it" } });
+      if (!res.ok) return null;
+      const arr = await res.json();
+      if (!arr || !arr.length) return null;
+      return { lat: parseFloat(arr[0].lat), lon: parseFloat(arr[0].lon) };
+    } catch (e) {
+      console.error("[FN] Errore geocodifica indirizzo:", e);
+      return null;
+    }
   }
 };
