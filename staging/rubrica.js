@@ -89,7 +89,7 @@
         const info = document.createElement("span");
         info.className = "info";
         const statoDot = d.stato && d.stato !== "attivo" ? ` <span class="stato-dot ${d.stato}" title="${STATO_LABEL[d.stato] || d.stato}"></span>` : "";
-        info.innerHTML = `${d.ref || "<i>referente n.d.</i>"}${statoDot}<br><span class="id">${d.id}</span>`;
+        info.innerHTML = `${d.ref || "<i>referente n.d.</i>"}${statoDot}<br><span class="id">${d.city || ""}</span>`;
 
         row.appendChild(cb);
         row.appendChild(avatar);

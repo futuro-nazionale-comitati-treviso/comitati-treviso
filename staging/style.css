@@ -453,3 +453,6 @@ form.stack input[type="file"] {
 .admin-panel { margin-top: 18px; }
 .admin-section { margin-bottom: 16px; }
 .admin-section:last-child { margin-bottom: 0; }
+
+/* Fix Fase 2: foto profilo sempre ritagliate dentro il cerchio */
+.detail-head img.avatar.avatar-img { object-fit: cover; }

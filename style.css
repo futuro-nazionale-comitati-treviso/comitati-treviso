@@ -365,3 +365,6 @@ form.stack input[type="file"] {
   .cal-weekdays span:nth-child(n) { font-size: 9px; }
   .dash-num { font-size: 22px; }
 }
+
+/* Fix Fase 2: foto profilo sempre ritagliate dentro il cerchio */
+.detail-head img.avatar.avatar-img { object-fit: cover; }
