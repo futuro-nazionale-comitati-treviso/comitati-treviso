@@ -1,0 +1,186 @@
+// Bootstrap dell'app: tabs, "chi sei", orchestrazione mappa<->rubrica<->dettaglio.
+(function () {
+  let activeId = null;
+  const STATO_LABEL = { attivo: "Attivo", inattivo: "Inattivo", in_costituzione: "In costituzione" };
+
+  function initials(d) {
+    const src = (d.ref || d.city || "?").trim();
+    const parts = src.split(/\s+/);
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : src.slice(0, 2)).toUpperCase();
+  }
+
+  // "Chi ha inserito/modificato la scheda": nome scelto nel menu "Sei:" in
+  // alto, auto-dichiarato (nessun login — vedi README). I 27 comitati
+  // storici non hanno createdBy (erano gia' in data.js prima di questa
+  // funzionalita'), quindi la riga resta vuota per loro finche' non vengono
+  // modificati la prima volta.
+  function tsToDate(ts) { return ts && typeof ts.toDate === "function" ? ts.toDate() : null; }
+  function fmtWhen(ts) {
+    const d = tsToDate(ts);
+    return d ? d.toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" }) : "adesso";
+  }
+  function chiHaFattoLabel(d) {
+    const parts = [];
+    if (d.createdBy) parts.push(`Creato da ${d.createdBy} il ${fmtWhen(d.createdAt)}`);
+    if (d.updatedBy && (d.updatedBy !== d.createdBy || tsToDate(d.updatedAt)?.getTime() !== tsToDate(d.createdAt)?.getTime())) {
+      parts.push(`ultima modifica di ${d.updatedBy} il ${fmtWhen(d.updatedAt)}`);
+    }
+    return parts.join(" — ");
+  }
+
+  function renderDetail(id) {
+    const el = document.getElementById("detail");
+    const d = window.FN_COMITATI.getById(id);
+    if (!d) { el.classList.add("empty"); el.textContent = "Seleziona un comitato dalla lista o dalla mappa per vedere i dettagli."; return; }
+    el.classList.remove("empty");
+    const eventi = window.FN_EVENTI ? window.FN_EVENTI.getForComitato(d.id) : [];
+    const statoBadge = d.stato && d.stato !== "attivo" ? `<span class="badge-stato ${d.stato}">${STATO_LABEL[d.stato] || d.stato}</span>` : "";
+    el.innerHTML = `
+      <div class="detail-head">
+        ${d.foto ? `<img class="avatar avatar-img" src="${d.foto}" alt="">` : `<div class="avatar">${initials(d)}</div>`}
+        <div>
+          <div class="detail-name">${d.ref || d.name}</div>
+          <span class="badge-city">${d.city}${d.provincia ? " (" + d.provincia + ")" : ""}</span>
+          ${statoBadge}
+        </div>
+      </div>
+      <div class="detail-rows">
+        <div class="detail-row"><span class="drow-label">Comitato</span><span class="drow-value">${d.name}</span></div>
+        ${d.indirizzo ? `<div class="detail-row"><span class="drow-label">Indirizzo</span><span class="drow-value">${d.indirizzo}</span></div>` : ""}
+        <div class="detail-row"><span class="drow-label">Email</span><span class="drow-value">${d.email}</span></div>
+        <div class="detail-row"><span class="drow-label">Telefono</span><a class="drow-value" href="tel:${d.tel}">${d.tel}</a></div>
+        ${d.ref2 ? `<div class="detail-row"><span class="drow-label">Secondo ref.</span><span class="drow-value">${d.ref2}</span></div>` : ""}
+        ${d.note ? `<div class="detail-row"><span class="drow-label">Note</span><span class="drow-value">${d.note}</span></div>` : ""}
+      </div>
+      ${chiHaFattoLabel(d) ? `<div class="detail-row chi-ha-fatto"><span class="drow-value" style="font-size:12px;color:var(--text-secondary,#777);">${chiHaFattoLabel(d)}</span></div>` : ""}
+      <div class="actions">
+        <button class="btn primary" data-action="write-email">✉️ Scrivi email</button>
+        <a class="btn" href="tel:${d.tel}">📞 Chiama</a>
+        <a class="btn accent" href="${window.FN_UTILS.waLink(d.tel)}" target="_blank">WhatsApp</a>
+        <button class="btn" data-action="edit-comitato">✏️ Modifica scheda</button>
+      </div>
+      ${eventi.length ? `
+      <div class="detail-eventi">
+        <h4 class="panel-subtitle">Eventi a cui ha partecipato/organizzato (${eventi.length})</h4>
+        <ul class="detail-eventi-list">
+          ${eventi.map(ev => `<li>${ev.title} <small>${ev.date ? new Date(ev.date).toLocaleDateString("it-IT") : ""}</small></li>`).join("")}
+        </ul>
+      </div>` : ""}
+    `;
+    // L'email non è un mailto diretto: passa dalla finestra di composizione
+    // condivisa, cosi' anche il messaggio a un singolo comitato parte sempre
+    // da comitatoroncade@gmail.com (se EmailJS è configurato, vedi emailjs-config.js).
+    el.querySelector('[data-action="write-email"]').addEventListener("click", () => {
+      window.FN_EMAIL.open({
+        title: `Email a ${d.ref || d.name}`,
+        recipients: [d],
+        recipientsLabel: `A: ${d.ref || d.name} <${d.email}>`
+      });
+    });
+    el.querySelector('[data-action="edit-comitato"]').addEventListener("click", () => {
+      if (window.FN_AUTH && !window.FN_AUTH.puoModificareComitato(d.id)) {
+        alert("Solo il referente di questo comitato o un amministratore possono modificarlo. Accedi dalla sezione Profilo.");
+        return;
+      }
+      window.FN_RUBRICA.openComitatoModal(d);
+    });
+    renderIscrittiPubblici(d.id);
+  }
+
+  // Iscritti pubblici (nome + professione) del comitato selezionato: visibili
+  // a chiunque, anche senza login (Fase 2). I dati di contatto restano nella
+  // pagina personale del referente, non qui.
+  let unsubIscrittiDettaglio = null;
+  function renderIscrittiPubblici(comitatoId) {
+    if (unsubIscrittiDettaglio) { unsubIscrittiDettaglio(); unsubIscrittiDettaglio = null; }
+    if (!window.FN_ISCRITTI || !window.FN_FIREBASE_READY) return;
+    unsubIscrittiDettaglio = window.FN_ISCRITTI.ascoltaPubblici(comitatoId, (lista) => {
+      const el = document.getElementById("detail");
+      if (!el || !el.querySelector(".detail-head")) return; // il dettaglio e' cambiato nel frattempo
+      let box = el.querySelector(".detail-iscritti-pubblici");
+      if (!box) {
+        box = document.createElement("div");
+        box.className = "detail-iscritti-pubblici";
+        el.appendChild(box);
+      }
+      box.innerHTML = lista.length
+        ? `<h4 class="panel-subtitle">Iscritti (${lista.length})</h4><div class="iscritti-chip-list">` +
+          lista.map(i => `<span class="pill">${i.nome}${i.professione ? " — " + i.professione : ""}</span>`).join("") +
+          `</div>`
+        : "";
+    });
+  }
+
+  function select(id) {
+    activeId = id;
+    renderDetail(id);
+    window.FN_MAP.setActive(id);
+    window.FN_RUBRICA.setActive(id);
+  }
+
+  function initTabs() {
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+        // Mappa (Comitati) ed evento hanno mini-mappe Leaflet che vivono in tab
+        // inizialmente nascoste: dimensioni 0x0 se inizializzate mentre nascoste,
+        // quindi le (ri)inizializziamo solo quando il loro tab diventa visibile.
+        if (btn.dataset.tab === "comitati" && window.FN_MAP) { window.FN_MAP.render(); if (window.FN_RUBRICA.refreshMap) window.FN_RUBRICA.refreshMap(); }
+        if (btn.dataset.tab === "eventi" && window.FN_EVENTI && window.FN_EVENTI.onShow) window.FN_EVENTI.onShow();
+        if (btn.dataset.tab === "dashboard" && window.FN_DASHBOARD) window.FN_DASHBOARD.refresh();
+        if (btn.dataset.tab === "calendario" && window.FN_CALENDARIO) window.FN_CALENDARIO.refresh();
+      });
+    });
+  }
+
+  function initWhoami() {
+    const sel = document.getElementById("whoami-select");
+    function rebuild(list) {
+      const saved = sel.value || localStorage.getItem("fn_whoami") || "";
+      const names = list.filter(d => d.ref).map(d => d.ref).sort((a, b) => a.localeCompare(b));
+      sel.innerHTML = '<option value="">Seleziona il tuo nome…</option>' + names.map(n => `<option value="${n}">${n}</option>`).join("");
+      if (names.includes(saved)) sel.value = saved;
+    }
+    window.FN_COMITATI.onChange(rebuild);
+    sel.addEventListener("change", () => localStorage.setItem("fn_whoami", sel.value));
+  }
+
+  // Ogni modulo si inizializza in modo isolato: se uno fallisce (es. la
+  // mappa non riesce a caricare i tile, connessione assente) non deve
+  // bloccare il resto dell'app (comitati, eventi, dashboard, calendario
+  // restano usabili).
+  function safe(label, fn) {
+    try { fn(); } catch (e) { console.error(`[FN] Errore inizializzazione "${label}":`, e); }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    // FN_AUTH va inizializzato per primo (Fase 2): FN_PROFILO, FN_MODULI,
+    // FN_ISCRITTI e i permessi di scrittura di comitati/eventi dipendono
+    // tutti dal suo stato (onChange), quindi deve gia' essere "in ascolto"
+    // prima che gli altri moduli partano.
+    safe("auth", () => window.FN_AUTH && window.FN_AUTH.init());
+    safe("dati-comitati", () => window.FN_COMITATI.init());
+    safe("tabs", initTabs);
+    safe("whoami", initWhoami);
+    // La mappa (tab "Comitati") non e' piu' il tab visibile di default (lo e'
+    // la Dashboard): la inizializziamo solo quando il tab diventa visibile
+    // (vedi initTabs), altrimenti Leaflet calcolerebbe dimensioni 0x0.
+    safe("eventi", () => window.FN_EVENTI.init());
+    safe("dashboard", () => window.FN_DASHBOARD && window.FN_DASHBOARD.init());
+    safe("calendario", () => window.FN_CALENDARIO && window.FN_CALENDARIO.init());
+    safe("moduli", () => window.FN_MODULI && window.FN_MODULI.init());
+    safe("profilo", () => window.FN_PROFILO && window.FN_PROFILO.init());
+  });
+
+  window.FN_APP = {
+    select,
+    // Dalla Fase 2 chi e' loggato come referente/admin viene attribuito con
+    // il suo nome reale; il vecchio menu "Sei:" resta solo come ripiego per
+    // chi non si e' ancora registrato (nessun controllo di scrittura si
+    // basa piu' su di lui: ci pensano le security rules via FN_AUTH).
+    whoami: () => (window.FN_AUTH && window.FN_AUTH.isLoggedIn() && window.FN_AUTH.nome()) || document.getElementById("whoami-select").value
+  };
+})();

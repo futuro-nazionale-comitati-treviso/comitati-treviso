@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    // Helper per i ruoli (Fase 2): niente Cloud Functions/custom claims
+    // (richiederebbero il piano Blaze), il ruolo e' un campo letto con
+    // get() dal documento utenti/{uid} di chi sta facendo la richiesta.
+    // ------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function myRuolo() {
+      return isSignedIn() && exists(/databases/$(database)/documents/utenti/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/utenti/$(request.auth.uid)).data.ruolo
+        : null;
+    }
+    function myComitatoId() {
+      return isSignedIn() && exists(/databases/$(database)/documents/utenti/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/utenti/$(request.auth.uid)).data.comitatoId
+        : null;
+    }
+    function isAdmin() {
+      return myRuolo() == "admin" || myRuolo() == "superadmin";
+    }
+    function isSuperadmin() {
+      return myRuolo() == "superadmin";
+    }
+    function puoModificareComitato(comitatoId) {
+      return isAdmin() || (myRuolo() == "referente" && myComitatoId() == comitatoId);
+    }
+
+    // ------------------------------------------------------------------
+    // Eventi: INVARIATI rispetto alla baseline pre-Fase 2 (vedi README.md,
+    // sezione "Regole Firestore"). Il blocco-giorno vive in una collection
+    // a parte (blocchi_giorno_treviso), quindi qui non tocchiamo nulla.
+    // ------------------------------------------------------------------
+    match /eventi_treviso/{doc} {
+      allow read: if true;
+      allow create: if request.resource.data.title is string
+                    && request.resource.data.title.size() < 200;
+      allow delete: if true;
+      allow update: if true;
+    }
+
+    // ------------------------------------------------------------------
+    // Blocco giorno evento (Fase 2): un solo evento confermato per giorno
+    // su tutta la piattaforma. Chiunque puo' "prenotare" un giorno libero
+    // (sbloccato:false, come oggi chiunque puo' creare un evento), ma solo
+    // un admin/superadmin puo' sbloccarlo (sbloccato:true) per permettere
+    // un secondo evento nello stesso giorno.
+    // ------------------------------------------------------------------
+    match /blocchi_giorno_treviso/{giorno} {
+      allow read: if true;
+      allow create: if request.resource.data.sbloccato == false;
+      allow update: if request.resource.data.sbloccato == false || isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // Comitati: lettura pubblica invariata. Creazione (anche automatica in
+    // fase di registrazione referente) richiede solo di essere autenticati;
+    // la modifica della scheda e' riservata al referente di QUEL comitato
+    // o a un admin/superadmin (prima era libera per chiunque avesse il link).
+    // ------------------------------------------------------------------
+    match /comitati_treviso/{comitatoId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.city is string
+                    && request.resource.data.city.size() < 200;
+      allow update: if puoModificareComitato(comitatoId)
+                    && request.resource.data.city is string
+                    && request.resource.data.city.size() < 200;
+      allow delete: if isAdmin();
+
+      // Iscritti pubblici (nome + professione): visibili a chiunque, anche
+      // senza login, come richiesto. Scrivibili solo dal referente di
+      // questo comitato o da un admin/superadmin.
+      match /iscritti_pubblici/{iscrittoId} {
+        allow read: if true;
+        allow write: if puoModificareComitato(comitatoId);
+      }
+
+      // Iscritti privati (email, telefono): leggibili e scrivibili SOLO dal
+      // referente di questo comitato o da un admin/superadmin.
+      match /iscritti_privati/{iscrittoId} {
+        allow read: if puoModificareComitato(comitatoId);
+        allow write: if puoModificareComitato(comitatoId);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Moduli e documenti: lettura pubblica (link a Google Drive, niente
+    // Firebase Storage), scrittura riservata agli admin/superadmin.
+    // ------------------------------------------------------------------
+    match /moduli_treviso/{doc} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // Utenti (profilo + ruolo di ogni referente/admin/superadmin).
+    // - Ognuno legge il proprio profilo; un admin/superadmin puo' leggere
+    //   quello di chiunque.
+    // - La "list" (query per email, usata solo per nominare un admin) e'
+    //   riservata al superadmin.
+    // - In creazione (registrazione) il ruolo deve essere "referente":
+    //   nessuno puo' auto-nominarsi admin.
+    // - In aggiornamento: un utente puo' modificare i propri dati (nome,
+    //   telefono) ma NON il proprio ruolo/comitatoId; solo il superadmin
+    //   puo' cambiare il ruolo di un altro utente, e solo verso
+    //   "referente" o "admin" (mai verso "superadmin" da qui).
+    // ------------------------------------------------------------------
+    match /utenti/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isSuperadmin();
+      allow create: if isSignedIn() && request.auth.uid == uid
+                    && request.resource.data.ruolo == "referente";
+      allow update: if isSignedIn() && (
+                      (request.auth.uid == uid
+                        && request.resource.data.ruolo == resource.data.ruolo
+                        && request.resource.data.comitatoId == resource.data.comitatoId)
+                      || (isSuperadmin()
+                          && uid != request.auth.uid
+                          && request.resource.data.ruolo in ["referente", "admin"])
+                    );
+      allow delete: if false;
+    }
+  }
+}
