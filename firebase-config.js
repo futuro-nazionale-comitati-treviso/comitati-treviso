@@ -14,12 +14,12 @@
 // ============================================================================
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCWc2W_9q9ASQ1Lys2zr_SjfacCL-bnAeI",
-  authDomain: "comitati---treviso.firebaseapp.com",
-  projectId: "comitati---treviso",
-  storageBucket: "comitati---treviso.firebasestorage.app",
-  messagingSenderId: "274725271566",
-  appId: "1:274725271566:web:c7a8f555841a5ae658a45f"
+  apiKey: "AIzaSyAP7-ocDo7w1uEgwwSxpAjMpwVwRM9hFdw",
+  authDomain: "comitati-treviso.firebaseapp.com",
+  projectId: "comitati-treviso",
+  storageBucket: "comitati-treviso.firebasestorage.app",
+  messagingSenderId: "923701126894",
+  appId: "1:923701126894:web:debdb8af331a39c24235ff"
 };
 
 // Inizializzazione (SDK compat, caricato via CDN in index.html).
