@@ -62,13 +62,17 @@
     });
   }
 
-  async function registrati({ nome, email, password, comitatoNome, telefono }) {
+  async function registrati({ nome, email, password, comitatoNome, telefono, privacyAccettata }) {
+    // Spunta privacy obbligatoria: controllata prima di creare l'account.
+    if (!privacyAccettata) throw new Error("Devi leggere e accettare l'informativa privacy.");
     const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
     await cred.user.sendEmailVerification();
     const comId = await cercaOCreaComitato(comitatoNome, { nome, email, telefono });
     await firebase.firestore().collection("utenti").doc(cred.user.uid).set({
       email, nome, comitatoId: comId, ruolo: "referente",
-      creatoIl: firebase.firestore.FieldValue.serverTimestamp()
+      creatoIl: firebase.firestore.FieldValue.serverTimestamp(),
+      privacyAccettataIl: firebase.firestore.FieldValue.serverTimestamp(),
+      privacyVersione: window.FN_PRIVACY.VERSIONE
     });
     return cred.user;
   }

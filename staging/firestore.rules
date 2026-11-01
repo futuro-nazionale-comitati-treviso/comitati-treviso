@@ -26,6 +26,12 @@ service cloud.firestore {
     function isSuperadmin() {
       return myRuolo() == "superadmin";
     }
+    // Spunta privacy: data/ora impostata dal SERVER (request.time, non
+    // falsificabile dal browser) + versione del testo accettato.
+    function privacyOk() {
+      return request.resource.data.privacyAccettataIl == request.time
+          && request.resource.data.privacyVersione is string;
+    }
     function puoModificareComitato(comitatoId) {
       return isAdmin() || (myRuolo() == "referente" && myComitatoId() == comitatoId);
     }
@@ -120,7 +126,8 @@ service cloud.firestore {
     // - La "list" (query per email, usata solo per nominare un admin) e'
     //   riservata al superadmin.
     // - In creazione (registrazione) il ruolo deve essere "referente":
-    //   nessuno puo' auto-nominarsi admin.
+    //   nessuno puo' auto-nominarsi admin, e la spunta privacy e' obbligatoria
+    //   (privacyAccettataIl = ora del server, privacyVersione).
     // - In aggiornamento: un utente puo' modificare i propri dati (nome,
     //   telefono) ma NON il proprio ruolo/comitatoId; solo il superadmin
     //   puo' cambiare il ruolo di un altro utente, e solo verso
@@ -130,11 +137,16 @@ service cloud.firestore {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isSuperadmin();
       allow create: if isSignedIn() && request.auth.uid == uid
-                    && request.resource.data.ruolo == "referente";
+                    && request.resource.data.ruolo == "referente"
+                    && privacyOk();
       allow update: if isSignedIn() && (
                       (request.auth.uid == uid
                         && request.resource.data.ruolo == resource.data.ruolo
-                        && request.resource.data.comitatoId == resource.data.comitatoId)
+                        && request.resource.data.comitatoId == resource.data.comitatoId
+                        // I campi privacy non cambiano, oppure cambiano solo con
+                        // data del server (nuova accettazione, vedi privacyOk).
+                        && (request.resource.data.get("privacyAccettataIl", null) == resource.data.get("privacyAccettataIl", null)
+                            || privacyOk()))
                       || (isSuperadmin()
                           && uid != request.auth.uid
                           && request.resource.data.ruolo in ["referente", "admin"])

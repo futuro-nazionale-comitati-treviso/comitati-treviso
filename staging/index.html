@@ -86,6 +86,11 @@
         <input type="text" id="ev-title" required placeholder="Es. Presidio in piazza">
         <label>Tipologia</label>
         <select id="ev-tipologia"></select>
+        <div id="ev-call-box" style="display:none;">
+          <label>Link della call (Google Meet, Zoom…)</label>
+          <input type="url" id="ev-meeting-link" placeholder="https://meet.google.com/xxx-xxxx-xxx">
+          <div class="auth-hint">Le call non bloccano la giornata. L'invito riporta in automatico l'avviso che la sessione sarà registrata.</div>
+        </div>
         <div class="form-row">
           <div><label>Data e ora inizio</label><input type="datetime-local" id="ev-date" required></div>
           <div><label>Ora fine (opzionale)</label><input type="time" id="ev-ora-fine"></div>
@@ -282,6 +287,7 @@
 <script src="firebase-config.js"></script>
 <script src="emailjs-config.js"></script>
 <script src="comitati-data.js"></script>
+<script src="privacy.js"></script>
 <script src="auth.js"></script>
 <script src="iscritti.js"></script>
 <script src="blocco-giorno.js"></script>

@@ -18,7 +18,14 @@
     BOZZA: "Bozza", IN_PROGRAMMAZIONE: "In programmazione", CONFERMATO: "Confermato",
     IN_CORSO: "In corso", CONCLUSO: "Concluso", ANNULLATO: "Annullato"
   };
-  const TIPOLOGIE = ["Presidio", "Banchetto/Gazebo", "Convegno/Dibattito", "Formazione", "Raccolta firme", "Cena sociale", "Volantinaggio", "Altro"];
+  const TIPO_CALL = "Call online";
+  const TIPOLOGIE = ["Presidio", "Banchetto/Gazebo", "Convegno/Dibattito", "Formazione", "Raccolta firme", "Cena sociale", "Volantinaggio", TIPO_CALL, "Altro"];
+  // Avviso di registrazione: inserito in automatico in email e .ics delle call
+  // (testo da far validare al legale, vedi doc di progetto sulla privacy).
+  const AVVISO_REGISTRAZIONE = "Attenzione: questa sessione sarà registrata ai fini della stesura di un resoconto. Accettando l'invito e partecipando alla call dai il consenso alla registrazione. Se non desideri essere registrato/a, scrivi all'organizzatore prima della call.";
+  const isCall = ev => ev && ev.tipologia === TIPO_CALL;
+  // Il link viene mostrato/cliccabile solo se e' http(s): niente schemi tipo javascript:.
+  const linkSicuro = u => typeof u === "string" && /^https?:\/\//i.test(u.trim());
   const ATTIVITA_OPTIONS = ["Supporto organizzativo", "Volantinaggio", "Presenza all'evento", "Accoglienza", "Gestione materiale", "Comunicazione", "Altro"];
   const PARTECIPAZIONE_STATI = ["DA_INVITARE", "INVITATO", "CONFERMATO", "NON_DISPONIBILE"];
   const PARTECIPAZIONE_LABEL = { DA_INVITARE: "Da invitare", INVITATO: "Invitato", CONFERMATO: "Confermato", NON_DISPONIBILE: "Non disponibile" };
@@ -172,7 +179,10 @@
     } else {
       end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // durata di default, non abbiamo un'ora di fine
     }
-    const luogoCompleto = [ev.place, ev.indirizzo, ev.comune].filter(Boolean).join(", ");
+    const luogoCompleto = isCall(ev) && ev.linkMeeting ? ev.linkMeeting : [ev.place, ev.indirizzo, ev.comune].filter(Boolean).join(", ");
+    const descrizione = isCall(ev)
+      ? [ev.description, ev.linkMeeting ? "Link call: " + ev.linkMeeting : "", AVVISO_REGISTRAZIONE].filter(Boolean).join("\n\n")
+      : ev.description;
     const lines = [
       "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Comitati di TREVISO//IT", "BEGIN:VEVENT",
       "UID:fn-evento-" + id + "@comitati-treviso",
@@ -182,7 +192,8 @@
       "SUMMARY:" + icsEscape(ev.title)
     ];
     if (luogoCompleto) lines.push("LOCATION:" + icsEscape(luogoCompleto));
-    if (ev.description) lines.push("DESCRIPTION:" + icsEscape(ev.description));
+    if (descrizione) lines.push("DESCRIPTION:" + icsEscape(descrizione));
+    if (isCall(ev) && linkSicuro(ev.linkMeeting)) lines.push("URL:" + ev.linkMeeting.trim());
     if (ev.lat != null && ev.lon != null) lines.push(`GEO:${ev.lat};${ev.lon}`);
     lines.push("END:VEVENT", "END:VCALENDAR");
     return lines.join("\r\n");
@@ -517,6 +528,7 @@
       <div class="meta chi-ha-fatto">${chiHaFattoLabel(ev)}</div>
       ${ev.poster ? `<img class="event-poster" src="${ev.poster}" alt="Locandina evento" title="Clicca per ingrandire">` : ""}
       <p style="font-size:13px;">${(ev.description || "").replace(/</g, "&lt;")}</p>
+      ${isCall(ev) && linkSicuro(ev.linkMeeting) ? `<div class="event-directions"><a class="btn small primary" target="_blank" rel="noopener" href="${encodeURI(ev.linkMeeting)}">🎥 Partecipa alla call</a></div>` : ""}
       ${ev.lat != null && ev.lon != null ? `
       <div class="event-directions">
         <a class="btn small" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${ev.lat},${ev.lon}">📍 Google Maps</a>
@@ -534,7 +546,7 @@
         </details>
       `).join("")}
       <div class="detail actions">
-        <button class="btn primary" data-action="notify">✉️ Invia notifica ai destinatari</button>
+        <button class="btn primary" data-action="notify">${isCall(ev) ? "✉️ Invita i referenti alla call" : "✉️ Invia notifica ai destinatari"}</button>
         <button class="btn" data-action="calendar">📅 Aggiungi al calendario</button>
         <button class="btn" data-action="delete">Elimina</button>
       </div>
@@ -561,11 +573,14 @@
     div.querySelector('[data-action="notify"]').addEventListener("click", () => {
       const recipients = targetContacts(ev.target);
       if (recipients.length === 0) { alert("Nessun destinatario per questo evento."); return; }
-      const subject = `Evento: ${ev.title}`;
-      const body = `${ev.title}\n${fmtDate(ev)}${luogoLabel(ev) ? "\nLuogo: " + luogoLabel(ev) : ""}\n\n${ev.description || ""}`
-        + (ev.poster ? "\n\n(Locandina disponibile nella scheda evento, tab Eventi dell'app.)" : "");
+      const call = isCall(ev);
+      const subject = call ? `Invito call: ${ev.title}` : `Evento: ${ev.title}`;
+      const body = call
+        ? `${ev.title}\n${fmtDate(ev)}\nLink della call: ${ev.linkMeeting || "(da comunicare)"}\n\n${ev.description || ""}\n\n${AVVISO_REGISTRAZIONE}`
+        : `${ev.title}\n${fmtDate(ev)}${luogoLabel(ev) ? "\nLuogo: " + luogoLabel(ev) : ""}\n\n${ev.description || ""}`
+          + (ev.poster ? "\n\n(Locandina disponibile nella scheda evento, tab Eventi dell'app.)" : "");
       window.FN_EMAIL.open({
-        title: `Notifica evento: ${ev.title}`,
+        title: call ? `Invito call: ${ev.title}` : `Notifica evento: ${ev.title}`,
         recipients,
         recipientsLabel: `A: ${recipients.length} comitati (${targetLabel})`,
         subject,
@@ -638,6 +653,18 @@
     populateSelectOptions();
     window.FN_COMITATI.onChange(populateSelectOptions);
 
+    // Tipologia "Call online": mostra il campo link e rende obbligatorio il link.
+    const tipoSelEl = document.getElementById("ev-tipologia");
+    const callBox = document.getElementById("ev-call-box");
+    const meetingInput = document.getElementById("ev-meeting-link");
+    function aggiornaCampiCall() {
+      const call = tipoSelEl.value === TIPO_CALL;
+      callBox.style.display = call ? "block" : "none";
+      meetingInput.required = call;
+    }
+    tipoSelEl.addEventListener("change", aggiornaCampiCall);
+    aggiornaCampiCall();
+
     let posterData = null;
     const posterInput = document.getElementById("ev-poster");
     const posterPreview = document.getElementById("ev-poster-preview");
@@ -659,6 +686,10 @@
     document.getElementById("event-form").addEventListener("submit", (e) => {
       e.preventDefault();
       if (!window.FN_FIREBASE_READY) { alert("Firebase non configurato: vedi il messaggio in alto."); return; }
+      if (document.getElementById("ev-tipologia").value === TIPO_CALL && !linkSicuro(document.getElementById("ev-meeting-link").value)) {
+        alert("Inserisci il link della call (deve iniziare con https://).");
+        return;
+      }
       const targetType = document.getElementById("ev-target-type").value;
       const target = targetType === "city"
         ? { type: "city", value: document.getElementById("ev-target-city").value }
@@ -670,6 +701,7 @@
       const ev = {
         title: document.getElementById("ev-title").value,
         tipologia: document.getElementById("ev-tipologia").value,
+        linkMeeting: document.getElementById("ev-tipologia").value === TIPO_CALL ? (document.getElementById("ev-meeting-link").value.trim() || null) : null,
         date: document.getElementById("ev-date").value,
         oraFine: document.getElementById("ev-ora-fine").value || null,
         place: document.getElementById("ev-place").value,
@@ -704,7 +736,11 @@
       // prenotazione del giorno e la creazione dell'evento si riferiscono
       // allo stesso evento fin dall'inizio.
       const nuovoRef = window.db.collection(COLLECTION).doc();
-      window.FN_BLOCCO_GIORNO.prenota(ev.date, nuovoRef.id).then(esito => {
+      // Le call online NON bloccano la giornata: niente prenotazione del giorno.
+      const prenotaGiorno = isCall(ev)
+        ? Promise.resolve({ ok: true, key: null })
+        : window.FN_BLOCCO_GIORNO.prenota(ev.date, nuovoRef.id);
+      prenotaGiorno.then(esito => {
         if (!esito.ok) {
           alert(`Il giorno ${esito.key} ha già un evento confermato: solo un amministratore può sbloccarlo per crearne un secondo (pannello amministratore, tab Profilo).`);
           return null;
@@ -714,6 +750,7 @@
           posterData = null;
           posterPreview.style.display = "none";
           resetPicker();
+          aggiornaCampiCall();
         });
       }).catch(err => alert("Errore: " + err.message));
     });

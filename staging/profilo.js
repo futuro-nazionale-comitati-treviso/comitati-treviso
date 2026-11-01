@@ -65,18 +65,22 @@
           <input type="password" id="reg-password" required minlength="6">
           <label>Telefono</label>
           <input type="tel" id="reg-telefono" placeholder="+39 ">
+          <div id="reg-privacy"></div>
           <button type="submit" class="btn primary">Crea account e invia verifica</button>
         </form>
         <p class="auth-hint">Nessuna approvazione manuale: ricevi una mail di verifica e sei subito operativo sul comitato che hai indicato. Gli iscritti non hanno un proprio accesso: li inserisci tu da qui una volta registrato.</p>`;
+      const spuntaPrivacy = window.FN_PRIVACY.creaSpunta(document.getElementById("reg-privacy"));
       document.getElementById("register-form").addEventListener("submit", (e) => {
         e.preventDefault();
+        if (!spuntaPrivacy.isChecked()) { status.textContent = "Apri l'informativa, leggila e spunta la casella per procedere."; return; }
         status.textContent = "Creazione account in corso…";
         window.FN_AUTH.registrati({
           nome: document.getElementById("reg-nome").value,
           comitatoNome: document.getElementById("reg-comitato").value,
           email: document.getElementById("reg-email").value,
           password: document.getElementById("reg-password").value,
-          telefono: document.getElementById("reg-telefono").value
+          telefono: document.getElementById("reg-telefono").value,
+          privacyAccettata: true
         }).catch(err => { status.textContent = "Errore: " + err.message; });
       });
     }

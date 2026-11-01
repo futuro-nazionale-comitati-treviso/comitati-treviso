@@ -516,3 +516,14 @@ form.stack input[type="file"] {
   .dash-stat-grid { grid-template-columns: repeat(2, 1fr); }
   .dash-two-col { grid-template-columns: 1fr; }
 }
+
+/* ---------- Privacy (spunta + lettore informativa) ---------- */
+.privacy-spunta { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin: 4px 0; }
+.privacy-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.45; font-weight: 400; color: var(--text-primary); }
+.privacy-check input { margin-top: 3px; }
+.privacy-check.disabled { opacity: .55; }
+.privacy-modal { max-width: 640px; }
+.privacy-testo { max-height: 55vh; overflow-y: auto; font-size: 13px; line-height: 1.55; padding-right: 6px; }
+.privacy-testo h4 { margin: 0 0 8px; font-size: 15px; }
+.privacy-testo p, .privacy-testo ul { margin: 0 0 10px; }
+.privacy-fine { color: var(--text-secondary); font-size: 12px; }

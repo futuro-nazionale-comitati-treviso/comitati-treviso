@@ -162,6 +162,7 @@
     // tutti dal suo stato (onChange), quindi deve gia' essere "in ascolto"
     // prima che gli altri moduli partano.
     safe("auth", () => window.FN_AUTH && window.FN_AUTH.init());
+    safe("privacy", () => window.FN_PRIVACY && window.FN_PRIVACY.init());
     safe("dati-comitati", () => window.FN_COMITATI.init());
     safe("tabs", initTabs);
     safe("whoami", initWhoami);
