@@ -64,7 +64,7 @@
 
   async function registrati({ nome, email, password, comitatoNome, telefono, privacyAccettata }) {
     // Spunta privacy obbligatoria: controllata prima di creare l'account.
-    if (!privacyAccettata) throw new Error("Devi leggere e accettare l'informativa privacy.");
+    if (!privacyAccettata) throw new Error("Devi spuntare la presa visione dell'informativa privacy.");
     const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
     await cred.user.sendEmailVerification();
     const comId = await cercaOCreaComitato(comitatoNome, { nome, email, telefono });

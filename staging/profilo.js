@@ -72,7 +72,7 @@
       const spuntaPrivacy = window.FN_PRIVACY.creaSpunta(document.getElementById("reg-privacy"));
       document.getElementById("register-form").addEventListener("submit", (e) => {
         e.preventDefault();
-        if (!spuntaPrivacy.isChecked()) { status.textContent = "Apri l'informativa, leggila e spunta la casella per procedere."; return; }
+        if (!spuntaPrivacy.isChecked()) { status.textContent = "Spunta la casella di presa visione per procedere."; return; }
         status.textContent = "Creazione account in corso…";
         window.FN_AUTH.registrati({
           nome: document.getElementById("reg-nome").value,
