@@ -66,7 +66,14 @@
 
   async function aggiorna(comitatoId, iscrittoId, { nome, professione, email, telefono }) {
     const ops = [];
-    if (nome !== undefined || professione !== undefined) {
+    // Correzione del solo nome: il privato si aggiorna sempre; il pubblico solo
+    // se esiste gia' (altrimenti correggere un nome renderebbe visibile a tutti
+    // una persona che non ha ancora la professione).
+    if (nome !== undefined && professione === undefined) {
+      ops.push(privRef(comitatoId).doc(iscrittoId).set({ nome }, { merge: true }));
+      const pubDoc = await pubRef(comitatoId).doc(iscrittoId).get();
+      if (pubDoc.exists) ops.push(pubRef(comitatoId).doc(iscrittoId).set({ nome }, { merge: true }));
+    } else if (nome !== undefined || professione !== undefined) {
       const pubPatch = { ...(nome !== undefined ? { nome } : {}), ...(professione !== undefined ? { professione } : {}) };
       // Un iscritto importato non ha ancora il record pubblico: il nome va
       // preso dal privato, cosi' il pubblico nasce completo (nome+professione).

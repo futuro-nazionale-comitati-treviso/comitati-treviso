@@ -431,7 +431,8 @@ form.stack input[type="file"] {
   padding: 10px 0; border-bottom: 1px solid var(--grigio-bordo);
 }
 .iscritto-row:last-child { border-bottom: none; }
-.iscritto-info { min-width: 0; }
+.iscritto-info { min-width: 0; flex: 1; }
+.iscritto-row { flex-wrap: wrap; }
 .iscritto-nome { font-weight: 700; font-size: 13.5px; }
 .iscritto-prof { font-weight: 500; color: var(--blu-3); }
 .iscritto-contatti { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }

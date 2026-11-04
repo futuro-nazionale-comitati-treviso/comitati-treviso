@@ -256,11 +256,14 @@
     if (stato.ruolo === "admin" || stato.ruolo === "superadmin") renderAdminPanel(stato);
   }
 
+  let modificaId = null; // iscritto in modifica (solo superadmin)
   function renderIscrittiList(comitatoId) {
     const wrap = document.getElementById("iscritti-list");
     if (!wrap) return;
     if (!listaIscritti.length) { wrap.innerHTML = '<p class="detail empty">Ancora nessun iscritto.</p>'; return; }
     const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    // Il pulsante Modifica e' solo per il superadmin (limite di interfaccia).
+    const superadmin = window.FN_AUTH && window.FN_AUTH.isSuperadmin();
     wrap.innerHTML = listaIscritti.map(i => `
       <div class="iscritto-row" data-id="${esc(i.id)}">
         <div class="iscritto-info">
@@ -271,8 +274,37 @@
             <button class="btn small" data-is-prof="${esc(i.id)}">Salva</button>
           </div>`}
         </div>
-        <button class="btn small" data-is-del="${esc(i.id)}">Rimuovi</button>
+        <div class="form-row" style="gap:6px;flex-direction:column;align-items:flex-end;">
+          ${superadmin ? `<button class="btn small" data-is-mod="${esc(i.id)}">Modifica</button>` : ""}
+          <button class="btn small" data-is-del="${esc(i.id)}">Rimuovi</button>
+        </div>
+        ${superadmin && modificaId === i.id ? `<div class="form-row" style="flex-basis:100%;gap:6px;margin-top:6px;flex-wrap:wrap;">
+          <input type="text" data-is-m-nome value="${esc(i.nome)}" placeholder="Nome e cognome" style="flex:2;min-width:160px;">
+          <input type="email" data-is-m-email value="${esc(i.email)}" placeholder="Email" style="flex:2;min-width:160px;">
+          <input type="tel" data-is-m-tel value="${esc(i.telefono)}" placeholder="Telefono" style="flex:1;min-width:110px;">
+          <button class="btn small primary" data-is-m-salva="${esc(i.id)}">Salva</button>
+          <button class="btn small" data-is-m-annulla>Annulla</button>
+        </div>` : ""}
       </div>`).join("");
+    wrap.querySelectorAll("[data-is-mod]").forEach(btn => {
+      btn.addEventListener("click", () => { modificaId = btn.dataset.isMod; renderIscrittiList(comitatoId); });
+    });
+    wrap.querySelectorAll("[data-is-m-annulla]").forEach(btn => {
+      btn.addEventListener("click", () => { modificaId = null; renderIscrittiList(comitatoId); });
+    });
+    wrap.querySelectorAll("[data-is-m-salva]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const riga = btn.closest(".iscritto-row");
+        const nome = riga.querySelector("[data-is-m-nome]").value.trim();
+        const email = riga.querySelector("[data-is-m-email]").value.trim();
+        const telefono = riga.querySelector("[data-is-m-tel]").value.trim();
+        if (!nome) { alert("Il nome non può essere vuoto."); return; }
+        btn.disabled = true;
+        window.FN_ISCRITTI.aggiorna(comitatoId, btn.dataset.isMSalva, { nome, email, telefono })
+          .then(() => { modificaId = null; renderIscrittiList(comitatoId); })
+          .catch(err => { alert("Errore: " + err.message); btn.disabled = false; });
+      });
+    });
     wrap.querySelectorAll("[data-is-prof]").forEach(btn => {
       btn.addEventListener("click", () => {
         const inp = wrap.querySelector(`[data-is-prof-input="${btn.dataset.isProf}"]`);
