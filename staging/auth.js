@@ -142,6 +142,64 @@
     return firebase.firestore().collection("utenti").doc(uid).delete();
   }
 
+  // ---------------------------------------------------------------------
+  // Creazione account referenti da parte del superadmin (nessuna
+  // registrazione libera necessaria). Si usa una SECONDA istanza Firebase
+  // solo per createUserWithEmailAndPassword: cosi' l'admin non viene
+  // sloggato (l'SDK client, creando un utente, fa login come quell'utente).
+  // La password iniziale e' casuale e NON viene mai mostrata ne' salvata:
+  // il referente la imposta da solo col link ufficiale Firebase
+  // (sendPasswordResetEmail). Creare l'account e invitare sono due azioni
+  // separate: l'invio del link parte solo quando lo decide il superadmin.
+  // ---------------------------------------------------------------------
+  let appCreazione = null;
+  function authCreazione() {
+    if (!appCreazione) appCreazione = firebase.initializeApp(firebase.app().options, "creazione-referenti");
+    return appCreazione.auth();
+  }
+
+  function passwordCasuale() {
+    const a = new Uint32Array(8);
+    crypto.getRandomValues(a);
+    return Array.from(a, x => x.toString(36)).join("") + "Aa1!";
+  }
+
+  async function creaReferente({ email, nome, telefono, comitatoId }) {
+    if (!isSuperadmin()) throw new Error("Solo il superadmin può creare account referenti.");
+    const mail = String(email || "").trim().toLowerCase();
+    if (!mail || !comitatoId) throw new Error("Servono email e comitato.");
+    const auth2 = authCreazione();
+    let uid;
+    try {
+      uid = (await auth2.createUserWithEmailAndPassword(mail, passwordCasuale())).user.uid;
+    } finally {
+      await auth2.signOut().catch(() => {});
+    }
+    // Niente campi privacy: alla prima apertura il referente vede la
+    // finestra di presa visione (come per chi si era registrato prima).
+    await firebase.firestore().collection("utenti").doc(uid).set({
+      email: mail, nome: nome || "", telefono: telefono || "",
+      comitatoId: String(comitatoId), ruolo: "referente",
+      creatoIl: firebase.firestore.FieldValue.serverTimestamp(),
+      creatoDa: currentUser.uid, invitoInviatoIl: null
+    });
+    return uid;
+  }
+
+  // Tutti i profili (solo superadmin, regola "allow list"), per sapere chi ha gia' un account.
+  async function elencaUtenti() {
+    if (!isSuperadmin()) throw new Error("Solo il superadmin può vedere l'elenco dei referenti.");
+    const snap = await firebase.firestore().collection("utenti").get();
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  }
+
+  async function invitaReferente(uid, email) {
+    if (!isSuperadmin()) throw new Error("Solo il superadmin può inviare gli inviti.");
+    await firebase.auth().sendPasswordResetEmail(String(email).trim().toLowerCase());
+    await firebase.firestore().collection("utenti").doc(uid).set(
+      { invitoInviatoIl: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  }
+
   function init() {
     if (!window.FN_FIREBASE_READY) { ready = true; notify(); return; }
     firebase.auth().onAuthStateChanged(user => {
@@ -169,7 +227,7 @@
     init, onChange, isLoggedIn, ruolo, isAdmin, isSuperadmin, comitatoId, nome,
     puoModificareComitato, registrati, accedi, esci, reimpostaPassword,
     aggiornaProfilo, impostaRuoloPerEmail, elencaAdmin, cercaUtentePerEmail,
-    aggiornaProfiloDi, eliminaUtente,
+    aggiornaProfiloDi, eliminaUtente, creaReferente, elencaUtenti, invitaReferente,
     currentUser: () => currentUser
   };
 })();

@@ -1,5 +1,6 @@
-// Dati di riferimento: 27 comitati Futuro Nazionale, provincia di Treviso.
-// Fonte: mappa pubblica futuronazionale.it/comitati/ (13/09/2026).
+// Dati di riferimento: 34 comitati Futuro Nazionale, provincia di Treviso.
+// Fonte: mappa pubblica futuronazionale.it/comitati/ (endpoint hub.futuronazionale.it/teams/list), allineata il 04/11/2026.
+// Gaiarine 118 e' ancora qui ma non compare piu' sul sito ufficiale (verificare).
 // Dal 15/09/2026 questo file non e' piu' l'unica fonte: e' il seed iniziale
 // (usato una sola volta per popolare Firestore, vedi comitati-data.js) e il
 // fallback in sola lettura se Firebase non e' configurato o raggiungibile.
@@ -30,11 +31,19 @@ window.CONTACTS = [
   { id: 2111, name: "Comitato Susegana 2111",               city: "Susegana",              ref: "Monia Campodall'Orto",       email: "matteo.monia@gmail.com",            tel: "3489348512", lat: 45.8541462, lon: 12.2490962 },
   { id: 1949, name: "Comitato Tarzo 1949",                  city: "Tarzo",                 ref: "Alexsandro Vescovi",         email: "alexsandro.vescovi@gmail.com",      tel: "3493334268", lat: 45.971864,  lon: 12.234952  },
   { id: 135,  name: "Comitato Treviso 135",                 city: "Treviso",               ref: "Annamaria Gava",             email: "gavaannamaria@gmail.com",           tel: "3277774433", lat: 45.6919489, lon: 12.2583682 },
-  { id: 933,  name: "Comitato Spresiano 933",               city: "Treviso",               ref: "Maurizio Demma",             email: "socratenero@yahoo.it",              tel: "3388887956", lat: 45.6750479, lon: 12.2343779 },
+  { id: 933,  name: "Comitato Spresiano 933",               city: "Spresiano",              ref: "Maurizio Demma",             email: "socratenero@yahoo.it",              tel: "3388887956", lat: 45.6750479, lon: 12.2343779 },
   { id: 1894, name: "Comitato Treviso 1894",                city: "Treviso",               ref: "Federico Robazza",           email: "federicorobazza@studiorobazza.it",  tel: "3484459165", lat: 45.6672623, lon: 12.2375699 },
   { id: 1976, name: "Comitato Vittorio Veneto 1976",        city: "Vittorio Veneto",       ref: "Luca Piccin",                email: "lucapiccin74@gmail.com",            tel: "3802125386", lat: 45.9848206, lon: 12.3143305 },
   { id: 2177, name: "Comitato Vittorio Veneto 2177",        city: "Vittorio Veneto",       ref: "Nicola Sonego",              email: "nicsonego@gmail.com",               tel: "3428804574", lat: 46.0217009, lon: 12.2870679 },
-  { id: 1027, name: "Comitato Zero Branco 1027",            city: "Zero Branco",           ref: "Pier Francesco Cappelletto", email: "cappellettopf@libero.it",           tel: "3355298992", lat: 45.5962706, lon: 12.1523786 }
+  { id: 1027, name: "Comitato Zero Branco 1027",            city: "Zero Branco",           ref: "Pier Francesco Cappelletto", email: "cappellettopf@libero.it",           tel: "3355298992", lat: 45.5962706, lon: 12.1523786 },
+  { id: 1164, name: "Comitato Valdobbiadene 1164", city: "Valdobbiadene", ref: "Simone Adami", email: "adami.simone@libero.it", tel: "3462107877", lat: 45.907408, lon: 12.041086 },
+  { id: 2222, name: "Comitato San Vendemiano 2222", city: "San Vendemiano", ref: "Luana Vettoretto", email: "luanavettoretto@gmail.com", tel: "3484725339", lat: 45.8945857, lon: 12.3357161 },
+  { id: 2223, name: "Comitato Vittorio Veneto 2223", city: "Vittorio Veneto", ref: "Riccardo Piccin", email: "riccardopiccin72@gmail.com", tel: "3472101404", lat: 46.056572, lon: 12.3224531 },
+  { id: 2230, name: "Comitato Arcade 2230", city: "Arcade", ref: "Fabio Calesso", email: "fabiocalesso.cfm@libero.it", tel: "3480706330", lat: 45.7852106, lon: 12.229448 },
+  { id: 2314, name: "Comitato Mareno di Piave 2314", city: "Mareno di Piave", ref: "Marco Sisto", email: "futuronazionale82@libero.it", tel: "3343862059", lat: 45.8394851, lon: 12.3470255 },
+  { id: 2338, name: "Comitato Trevignano 2338", city: "Trevignano", ref: "Adriana De Simone", email: "desimonedriana14@gmail.com", tel: "3519499037", lat: 45.7424365, lon: 12.0887346 },
+  { id: 2383, name: "Comitato Montebelluna 2383", city: "Montebelluna", ref: "Emanuele Petrocchi", email: "emanuele.petrocchi02@gmail.com", tel: "3934524444", lat: 45.7628814, lon: 12.0091269 },
+  { id: 2319, name: "Comitato Farra di Soligo 2319", city: "Farra di Soligo", ref: "Marta Napoli", email: "martanapoli73@gmail.com", tel: "3382418115", lat: 45.9035106, lon: 12.1143166 }
 ];
 
 // utility condivise

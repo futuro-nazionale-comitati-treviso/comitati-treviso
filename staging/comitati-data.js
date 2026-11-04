@@ -143,5 +143,27 @@
     return batch.commit();
   }
 
-  window.FN_COMITATI = { init, onChange, getAll, getById, update, create, remove, isEditable, provinceInUse };
+  // Riallineamento (solo superadmin, vedi profilo.js): aggiunge a Firestore i
+  // comitati presenti in data.js ma assenti nella collection. NON tocca mai i
+  // comitati gia' esistenti, cosi' non si sovrascrivono foto, sede o modifiche
+  // fatte dai referenti. Restituisce i nomi dei comitati aggiunti.
+  async function riallineaDaStatico() {
+    if (!isEditable()) return Promise.reject(new Error("Firebase non configurato."));
+    const snap = await window.db.collection(COLLECTION).get();
+    const esistenti = new Set(snap.docs.map(d => d.id));
+    const mancanti = window.CONTACTS.filter(d => !esistenti.has(String(d.id)));
+    if (!mancanti.length) return [];
+    const who = whoami();
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    const batch = window.db.batch();
+    mancanti.forEach(d => {
+      batch.set(window.db.collection(COLLECTION).doc(String(d.id)),
+        normalize({ ...d, createdBy: who, createdAt: now, updatedBy: who, updatedAt: now }));
+    });
+    await batch.commit();
+    if (window.FN_ATTIVITA) window.FN_ATTIVITA.registra("comitato", `Allineati ${mancanti.length} nuovi comitati dall'elenco ufficiale.`);
+    return mancanti.map(d => d.name);
+  }
+
+  window.FN_COMITATI = { init, onChange, getAll, getById, update, create, remove, isEditable, provinceInUse, riallineaDaStatico };
 })();

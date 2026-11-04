@@ -125,6 +125,8 @@ service cloud.firestore {
     //   quello di chiunque.
     // - La "list" (query per email, usata solo per nominare un admin) e'
     //   riservata al superadmin.
+    // - Il superadmin puo' anche creare il profilo di un referente (account
+    //   creato da lui, vedi creaReferente in auth.js), sempre con ruolo "referente".
     // - In creazione (registrazione) il ruolo deve essere "referente":
     //   nessuno puo' auto-nominarsi admin, e la spunta privacy e' obbligatoria
     //   (privacyAccettataIl = ora del server, privacyVersione).
@@ -136,9 +138,15 @@ service cloud.firestore {
     match /utenti/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isSuperadmin();
-      allow create: if isSignedIn() && request.auth.uid == uid
+      allow create: if (isSignedIn() && request.auth.uid == uid
                     && request.resource.data.ruolo == "referente"
-                    && privacyOk();
+                    && privacyOk())
+                    // Account creato dal superadmin per un referente (senza
+                    // campi privacy: la presa visione si fa al primo accesso).
+                    || (isSuperadmin()
+                    && request.resource.data.ruolo == "referente"
+                    && request.resource.data.comitatoId is string
+                    && !("privacyAccettataIl" in request.resource.data));
       allow update: if isSignedIn() && (
                       (request.auth.uid == uid
                         && request.resource.data.ruolo == resource.data.ruolo

@@ -146,6 +146,13 @@
           <span class="pill pill-public">Nome e professione — visibili a tutti</span>
         </div>
         <div id="iscritti-list"></div>
+        <details class="iscritti-import" style="margin-top:12px;">
+          <summary style="cursor:pointer;font-weight:700;">📥 Importa da Excel (elenco membri del sito ufficiale)</summary>
+          <p class="muted" style="font-size:12px;margin:8px 0;">Il file resta sul tuo dispositivo: viene letto qui e non viene caricato da nessuna parte. Vengono importati solo nome, numero di tessera, email e cellulare; codice fiscale e indirizzo vengono ignorati. Reimportare lo stesso file non crea doppioni. Gli iscritti importati restano visibili solo a te finché non indichi la professione.</p>
+          <input type="file" id="is-import-file" accept=".xlsx,.xls,.csv">
+          <div id="is-import-anteprima" class="email-modal-status"></div>
+          <button type="button" class="btn primary" id="is-import-conferma" style="display:none;margin-top:8px;"></button>
+        </details>
         <form class="stack" id="iscritto-form" style="margin-top:12px;">
           <div class="form-row">
             <div><label>Nome iscritto</label><input type="text" id="is-nome" required></div>
@@ -206,6 +213,40 @@
       }).then(() => e.target.reset()).catch(err => alert("Errore: " + err.message));
     });
 
+    let importPronto = null;
+    const fileInput = document.getElementById("is-import-file");
+    const anteprimaEl = document.getElementById("is-import-anteprima");
+    const confermaBtn = document.getElementById("is-import-conferma");
+    fileInput.addEventListener("change", async () => {
+      importPronto = null; confermaBtn.style.display = "none";
+      const f = fileInput.files[0];
+      if (!f) { anteprimaEl.textContent = ""; return; }
+      anteprimaEl.textContent = "Lettura del file…";
+      try {
+        const lett = await window.FN_ISCRITTI.leggiExcel(f);
+        const { nuove, gia } = await window.FN_ISCRITTI.anteprimaImport(stato.profile.comitatoId, lett.righe);
+        const parti = [`${lett.righe.length} tesserati nel file`, `${nuove.length} nuovi`, `${gia.length} già presenti (non toccati)`];
+        if (lett.scartate.length) parti.push(`${lett.scartate.length} righe scartate (${lett.scartate.slice(0, 5).map(x => `riga ${x.riga}: ${x.motivo}`).join("; ")}${lett.scartate.length > 5 ? "…" : ""})`);
+        if (lett.doppioniNelFile) parti.push(`${lett.doppioniNelFile} doppioni nel file ignorati`);
+        anteprimaEl.textContent = parti.join(" · ");
+        if (nuove.length) {
+          importPronto = nuove;
+          confermaBtn.textContent = `Importa ${nuove.length} nuovi tesserati`;
+          confermaBtn.style.display = "";
+        }
+      } catch (err) { anteprimaEl.textContent = "Errore: " + err.message; }
+    });
+    confermaBtn.addEventListener("click", async () => {
+      if (!importPronto) return;
+      confermaBtn.disabled = true;
+      try {
+        const n = await window.FN_ISCRITTI.importa(stato.profile.comitatoId, importPronto);
+        anteprimaEl.textContent = `Importati ${n} tesserati. Ora puoi aggiungere la professione a ciascuno dall'elenco qui sopra.`;
+        importPronto = null; confermaBtn.style.display = "none"; fileInput.value = "";
+      } catch (err) { anteprimaEl.textContent = "Errore: " + err.message; }
+      confermaBtn.disabled = false;
+    });
+
     if (unsubIscritti) unsubIscritti();
     unsubIscritti = window.FN_ISCRITTI.ascoltaCompleti(stato.profile.comitatoId, (lista) => {
       listaIscritti = lista;
@@ -219,14 +260,29 @@
     const wrap = document.getElementById("iscritti-list");
     if (!wrap) return;
     if (!listaIscritti.length) { wrap.innerHTML = '<p class="detail empty">Ancora nessun iscritto.</p>'; return; }
+    const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     wrap.innerHTML = listaIscritti.map(i => `
-      <div class="iscritto-row" data-id="${i.id}">
+      <div class="iscritto-row" data-id="${esc(i.id)}">
         <div class="iscritto-info">
-          <div class="iscritto-nome">${i.nome || "(senza nome)"}${i.professione ? ` — <span class="iscritto-prof">${i.professione}</span>` : ""}</div>
-          <div class="iscritto-contatti">${[i.email, i.telefono].filter(Boolean).join(" · ") || "<i>nessun contatto</i>"}</div>
+          <div class="iscritto-nome">${esc(i.nome) || "(senza nome)"}${i.professione ? ` — <span class="iscritto-prof">${esc(i.professione)}</span>` : ""}</div>
+          <div class="iscritto-contatti">${[i.email, i.telefono].filter(Boolean).map(esc).join(" · ") || "<i>nessun contatto</i>"}</div>
+          ${i.professione ? "" : `<div class="form-row" style="margin-top:6px;gap:6px;">
+            <input type="text" placeholder="Professione (poi diventa visibile a tutti con il nome)" data-is-prof-input="${esc(i.id)}" style="flex:3;">
+            <button class="btn small" data-is-prof="${esc(i.id)}">Salva</button>
+          </div>`}
         </div>
-        <button class="btn small" data-is-del="${i.id}">Rimuovi</button>
+        <button class="btn small" data-is-del="${esc(i.id)}">Rimuovi</button>
       </div>`).join("");
+    wrap.querySelectorAll("[data-is-prof]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const inp = wrap.querySelector(`[data-is-prof-input="${btn.dataset.isProf}"]`);
+        const prof = (inp && inp.value || "").trim();
+        if (!prof) return;
+        btn.disabled = true;
+        window.FN_ISCRITTI.aggiorna(comitatoId, btn.dataset.isProf, { professione: prof })
+          .catch(err => { alert("Errore: " + err.message); btn.disabled = false; });
+      });
+    });
     wrap.querySelectorAll("[data-is-del]").forEach(btn => {
       btn.addEventListener("click", () => {
         if (confirm("Rimuovere questo iscritto?")) window.FN_ISCRITTI.rimuovi(comitatoId, btn.dataset.isDel);
@@ -266,6 +322,71 @@
     }).catch(err => { wrap.innerHTML = `<p class="detail empty">Errore: ${err.message}</p>`; });
   }
 
+  // Elenco comitati con stato dell'account del referente (solo superadmin).
+  async function renderCreaReferenti() {
+    const wrap = document.getElementById("admin-ref-lista");
+    if (!wrap) return;
+    const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    wrap.innerHTML = '<p class="detail empty">Caricamento…</p>';
+    let utenti;
+    try { utenti = await window.FN_AUTH.elencaUtenti(); }
+    catch (err) { wrap.innerHTML = `<p class="detail empty">Errore: ${esc(err.message)}</p>`; return; }
+    const perEmail = new Map(utenti.map(u => [String(u.email || "").toLowerCase(), u]));
+    const righe = window.FN_COMITATI.getAll()
+      .filter(c => c.email)
+      .sort((a, b) => a.name.localeCompare(b.name, "it"))
+      .map(c => ({ c, u: perEmail.get(c.email.trim().toLowerCase()) || null }));
+    const daCreare = righe.filter(r => !r.u);
+    // Solo gli account creati da qui e non ancora invitati: chi si era gia' registrato da solo (o sei tu) non riceve nulla.
+    const daInvitare = righe.filter(r => r.u && r.u.creatoDa && r.u.ruolo === "referente" && !r.u.invitoInviatoIl);
+    wrap.innerHTML = `
+      <div class="muted" style="font-size:12px;margin:8px 0;">${righe.length} comitati con email · ${daCreare.length} senza account · ${daInvitare.length} con account ma non ancora invitati</div>
+      <div id="admin-ref-righe">${righe.map(({ c, u }) => `
+        <div class="iscritto-row">
+          <div class="iscritto-info">
+            <div class="iscritto-nome">${esc(c.name)}</div>
+            <div class="iscritto-contatti">${esc(c.ref || "(referente non indicato)")} · ${esc(c.email)}</div>
+          </div>
+          <span class="pill ${u ? ((u.invitoInviatoIl || !u.creatoDa) ? "pill-public" : "pill-private") : ""}">${u ? ((u.invitoInviatoIl || !u.creatoDa) ? "Ha già accesso" : "Account creato") : "Da creare"}</span>
+        </div>`).join("")}</div>
+      <div class="form-row" style="margin-top:10px;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn primary" id="admin-ref-crea" ${daCreare.length ? "" : "disabled"}>Crea ${daCreare.length} account (nessuna email)</button>
+        <button type="button" class="btn" id="admin-ref-invita" ${daInvitare.length ? "" : "disabled"}>Invia link password a ${daInvitare.length}</button>
+      </div>
+      <div class="email-modal-status" id="admin-ref-status"></div>`;
+    const status = document.getElementById("admin-ref-status");
+
+    document.getElementById("admin-ref-crea").addEventListener("click", async (e) => {
+      if (!confirm(`Creare ${daCreare.length} account referente? Non viene inviata nessuna email.`)) return;
+      e.target.disabled = true;
+      let ok = 0; const errori = [];
+      for (const { c } of daCreare) {
+        status.textContent = `Creazione ${ok + errori.length + 1}/${daCreare.length}…`;
+        try {
+          await window.FN_AUTH.creaReferente({ email: c.email, nome: c.ref || c.name, telefono: c.tel, comitatoId: c.id });
+          ok++;
+        } catch (err) {
+          errori.push(`${c.name}: ${err.code === "auth/email-already-in-use" ? "esiste già un account con questa email" : err.message}`);
+        }
+      }
+      status.textContent = `Creati ${ok} account.` + (errori.length ? ` Non riusciti (${errori.length}): ${errori.join("; ")}` : "");
+      renderCreaReferenti().then(() => { document.getElementById("admin-ref-status").textContent = status.textContent; });
+    });
+
+    document.getElementById("admin-ref-invita").addEventListener("click", async (e) => {
+      if (!confirm(`Inviare ora l'email con il link per impostare la password a ${daInvitare.length} referenti?`)) return;
+      e.target.disabled = true;
+      let ok = 0; const errori = [];
+      for (const { c, u } of daInvitare) {
+        status.textContent = `Invio ${ok + errori.length + 1}/${daInvitare.length}…`;
+        try { await window.FN_AUTH.invitaReferente(u.uid, u.email); ok++; }
+        catch (err) { errori.push(`${c.name}: ${err.message}`); }
+      }
+      const msg = `Inviati ${ok} inviti.` + (errori.length ? ` Non riusciti (${errori.length}): ${errori.join("; ")}` : "");
+      renderCreaReferenti().then(() => { document.getElementById("admin-ref-status").textContent = msg; });
+    });
+  }
+
   function renderAdminPanel(stato) {
     const wrap = document.getElementById("profilo-admin-panel");
     if (!wrap) return;
@@ -285,6 +406,18 @@
           <div id="admin-lista-admin"></div>
         </div>
         <div class="admin-section">
+          <h4 style="margin:8px 0;">Allinea comitati con l'elenco ufficiale</h4>
+          <div class="muted" style="font-size:11.5px;margin-bottom:6px;">Aggiunge i comitati dell'elenco ufficiale che non sono ancora nel database. Non modifica quelli esistenti.</div>
+          <button type="button" class="btn" id="admin-riallinea-btn">Allinea ora</button>
+          <div class="email-modal-status" id="admin-riallinea-status"></div>
+        </div>
+        <div class="admin-section">
+          <h4 style="margin:8px 0;">Crea account referenti</h4>
+          <div class="muted" style="font-size:11.5px;margin-bottom:6px;">Crea l'account di ogni referente usando l'email del suo comitato. Creare l'account non invia nessuna email: i link per impostare la password si inviano dopo, con il pulsante dedicato, quando decidi tu.</div>
+          <button type="button" class="btn" id="admin-ref-carica">Mostra comitati</button>
+          <div id="admin-ref-lista"></div>
+        </div>
+        <div class="admin-section">
           <h4 style="margin:8px 0;">Gestione referenti</h4>
           <label>Email del referente da cercare</label>
           <div class="form-row">
@@ -302,6 +435,14 @@
       </div>`;
 
     if (stato.ruolo === "superadmin") {
+      document.getElementById("admin-ref-carica").addEventListener("click", () => renderCreaReferenti());
+      document.getElementById("admin-riallinea-btn").addEventListener("click", () => {
+        const st = document.getElementById("admin-riallinea-status");
+        st.textContent = "Allineamento in corso…";
+        window.FN_COMITATI.riallineaDaStatico()
+          .then(n => { st.textContent = n.length ? `Aggiunti ${n.length} comitati: ${n.join(", ")}.` : "Nessun comitato da aggiungere: sei già allineato."; })
+          .catch(err => { st.textContent = "Errore: " + err.message; });
+      });
       document.getElementById("admin-nomina-btn").addEventListener("click", () => {
         const status = document.getElementById("admin-nomina-status");
         const email = document.getElementById("admin-nomina-email").value;
