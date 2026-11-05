@@ -86,6 +86,8 @@
   }
 
   function reimpostaPassword(email) {
+    // Email di Firebase in italiano (i template del progetto non sono modificabili).
+    firebase.auth().languageCode = "it";
     return firebase.auth().sendPasswordResetEmail(email);
   }
 
@@ -195,6 +197,7 @@
 
   async function invitaReferente(uid, email) {
     if (!isSuperadmin()) throw new Error("Solo il superadmin può inviare gli inviti.");
+    firebase.auth().languageCode = "it"; // email di invito in italiano
     await firebase.auth().sendPasswordResetEmail(String(email).trim().toLowerCase());
     await firebase.firestore().collection("utenti").doc(uid).set(
       { invitoInviatoIl: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
