@@ -37,16 +37,17 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // Eventi: INVARIATI rispetto alla baseline pre-Fase 2 (vedi README.md,
-    // sezione "Regole Firestore"). Il blocco-giorno vive in una collection
-    // a parte (blocchi_giorno_treviso), quindi qui non tocchiamo nulla.
+    // Eventi: lettura pubblica, scrittura solo con account (ruolo valorizzato).
+    // Il blocco-giorno vive in una collection a parte (blocchi_giorno_treviso).
     // ------------------------------------------------------------------
     match /eventi_treviso/{doc} {
       allow read: if true;
-      allow create: if request.resource.data.title is string
+      // Scrittura solo per chi ha un account con ruolo (referente/admin/superadmin).
+      allow create: if myRuolo() != null
+                    && request.resource.data.title is string
                     && request.resource.data.title.size() < 200;
-      allow delete: if true;
-      allow update: if true;
+      allow update: if myRuolo() != null;
+      allow delete: if myRuolo() != null;
     }
 
     // ------------------------------------------------------------------

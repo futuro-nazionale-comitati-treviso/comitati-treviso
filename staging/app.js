@@ -138,6 +138,7 @@
 
   function initWhoami() {
     const sel = document.getElementById("whoami-select");
+    if (!sel) return; // selettore rimosso: l'attribuzione usa il login
     function rebuild(list) {
       const saved = sel.value || localStorage.getItem("fn_whoami") || "";
       const names = list.filter(d => d.ref).map(d => d.ref).sort((a, b) => a.localeCompare(b));
@@ -182,6 +183,6 @@
     // il suo nome reale; il vecchio menu "Sei:" resta solo come ripiego per
     // chi non si e' ancora registrato (nessun controllo di scrittura si
     // basa piu' su di lui: ci pensano le security rules via FN_AUTH).
-    whoami: () => (window.FN_AUTH && window.FN_AUTH.isLoggedIn() && window.FN_AUTH.nome()) || document.getElementById("whoami-select").value
+    whoami: () => (window.FN_AUTH && window.FN_AUTH.isLoggedIn() && window.FN_AUTH.nome()) || ""
   };
 })();
