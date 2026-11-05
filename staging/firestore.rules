@@ -70,7 +70,7 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     match /comitati_treviso/{comitatoId} {
       allow read: if true;
-      allow create: if isSignedIn()
+      allow create: if isAdmin()
                     && request.resource.data.city is string
                     && request.resource.data.city.size() < 200;
       allow update: if puoModificareComitato(comitatoId)
@@ -112,7 +112,7 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     match /attivita_treviso/{doc} {
       allow read: if true;
-      allow create: if isSignedIn()
+      allow create: if myRuolo() != null
                     && request.resource.data.messaggio is string
                     && request.resource.data.messaggio.size() < 200;
       allow update: if false;
@@ -138,15 +138,15 @@ service cloud.firestore {
     match /utenti/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isSuperadmin();
-      allow create: if (isSignedIn() && request.auth.uid == uid
-                    && request.resource.data.ruolo == "referente"
-                    && privacyOk())
-                    // Account creato dal superadmin per un referente (senza
-                    // campi privacy: la presa visione si fa al primo accesso).
-                    || (isSuperadmin()
+      // Registrazione libera CHIUSA: un utente non puo' piu' creare da solo il
+      // proprio profilo (altrimenti potrebbe scegliersi un comitatoId qualsiasi
+      // e leggere gli iscritti privati di altri comitati). Solo il superadmin
+      // crea il profilo di un referente (senza campi privacy: la presa visione
+      // si fa al primo accesso).
+      allow create: if isSuperadmin()
                     && request.resource.data.ruolo == "referente"
                     && request.resource.data.comitatoId is string
-                    && !("privacyAccettataIl" in request.resource.data));
+                    && !("privacyAccettataIl" in request.resource.data);
       allow update: if isSignedIn() && (
                       (request.auth.uid == uid
                         && request.resource.data.ruolo == resource.data.ruolo

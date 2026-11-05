@@ -14,18 +14,16 @@
   function renderAuthForms(tab) {
     const el = container();
     if (!el) return;
-    const isAccedi = tab !== "registrati";
+    const isAccedi = true; // registrazione libera chiusa: gli account dei referenti li crea l'amministratore
     el.innerHTML = `
       <div class="card auth-card">
         <div class="auth-tabs">
-          <button type="button" class="auth-tab ${isAccedi ? "active" : ""}" id="auth-tab-accedi">Accedi</button>
-          <button type="button" class="auth-tab ${!isAccedi ? "active" : ""}" id="auth-tab-registrati">Registra il tuo comitato</button>
+          <button type="button" class="auth-tab active" id="auth-tab-accedi">Accedi</button>
         </div>
         <div id="auth-form-area"></div>
         <div class="email-modal-status" id="auth-status"></div>
       </div>`;
     document.getElementById("auth-tab-accedi").addEventListener("click", () => renderAuthForms("accedi"));
-    document.getElementById("auth-tab-registrati").addEventListener("click", () => renderAuthForms("registrati"));
     const area = document.getElementById("auth-form-area");
     const status = document.getElementById("auth-status");
 
@@ -38,7 +36,8 @@
           <input type="password" id="login-password" required>
           <button type="submit" class="btn primary">Accedi</button>
           <button type="button" class="btn" id="login-reset" style="align-self:flex-start;">Password dimenticata?</button>
-        </form>`;
+        </form>
+        <p class="auth-hint">Non hai ancora l'accesso? Il tuo account viene creato dall'amministratore: ti arriverà un'email con il link per scegliere la password.</p>`;
       document.getElementById("login-form").addEventListener("submit", (e) => {
         e.preventDefault();
         status.textContent = "Accesso in corso…";
